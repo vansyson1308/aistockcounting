@@ -1,12 +1,13 @@
-import pytest
-
-pytest.importorskip("PIL")
-pytest.importorskip("fastapi")
-
+import importlib.util
 import io
 
 import pytest
-from PIL import Image
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("fastapi") is None
+    or importlib.util.find_spec("PIL") is None,
+    reason="fastapi or pillow not installed",
+)
 
 
 @pytest.mark.asyncio
@@ -55,6 +56,8 @@ async def test_save_history_stats_flow(client, monkeypatch):
         lambda self, payload, name: ("uploads/flow.jpg", "thumbnails/flow.jpg"),
     )
 
+    from PIL import Image
+
     image = Image.new("RGB", (50, 50), "white")
     b = io.BytesIO()
     image.save(b, format="PNG")
@@ -100,6 +103,8 @@ async def test_history_detail_by_id(client, monkeypatch):
         "save_image_and_thumbnail",
         lambda self, payload, name: ("uploads/detail.jpg", "thumbnails/detail.jpg"),
     )
+
+    from PIL import Image
 
     image = Image.new("RGB", (30, 30), "white")
     b = io.BytesIO()

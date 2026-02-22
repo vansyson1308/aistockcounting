@@ -1,13 +1,17 @@
+import asyncio
+import importlib.util
+
 import pytest
 
-pytest.importorskip("PIL")
-
-import asyncio
-
-from app.services.inference import InferenceService
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("PIL") is None,
+    reason="pillow not installed",
+)
 
 
 def test_mock_inference_deterministic() -> None:
+    from app.services.inference import InferenceService
+
     service = InferenceService()
     payload = b"same-input"
     a = asyncio.run(service.predict(payload))
