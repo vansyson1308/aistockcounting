@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+!.env.cvat.example
+!.env.staging.example
+!.env.prod.example
+cvat/.env.cvat
+frontend/tsconfig.tsbuildinfo
+__pycache__/
+*.pyc

@@ -1,0 +1,27 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${{ secrets.STAGING_PORT || 22 }}" "${{ secrets.STAGING_HOST }}" >> ~/.ssh/known_hosts
+      - name: Sync repository scripts
+        run: |
+          rsync -az --delete -e "ssh -p ${{ secrets.STAGING_PORT || 22 }}" ./ "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/opt/vj-inventory/current/"
+      - name: Run deploy script
+        env:
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
+        run: |
+          ssh -p "${STAGING_PORT:-22}" "${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}" "cd /opt/vj-inventory/current && chmod +x ops/deploy_staging.sh ops/smoke_test.sh && ./ops/deploy_staging.sh"

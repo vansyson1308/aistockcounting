@@ -1,0 +1,11 @@
+model: yolov8n.pt
+data: datasets/vj_items/data.yaml
+epochs: 50
+imgsz: 640
+batch: 8
+seed: 42
+project: outputs/vj_items
+name: yolo_v1
+workers: 4
+patience: 20
+device: cpu
