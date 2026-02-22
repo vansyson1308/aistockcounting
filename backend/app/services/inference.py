@@ -19,7 +19,9 @@ class InferenceService:
     def __init__(self) -> None:
         self.settings = get_settings()
         if InferenceService._semaphore is None:
-            InferenceService._semaphore = asyncio.Semaphore(self.settings.inference_concurrency_limit)
+            InferenceService._semaphore = asyncio.Semaphore(
+                self.settings.inference_concurrency_limit
+            )
 
         self.onnx_path = Path(self.settings.model_onnx_path)
         self.pt_path = Path(self.settings.model_pt_path)
@@ -46,7 +48,9 @@ class InferenceService:
         if self.pt_path.exists():
             return self._run_yolo(str(self.pt_path), image_bytes)
 
-        logger.warning("No MODEL_ONNX_PATH/MODEL_PT_PATH found; fallback to MOCK_MODE behavior")
+        logger.warning(
+            "No MODEL_ONNX_PATH/MODEL_PT_PATH found; fallback to MOCK_MODE behavior"
+        )
         return self._mock_predict(image_bytes)
 
     def _run_yolo(self, model_path: str, image_bytes: bytes) -> dict[str, Any]:
@@ -58,7 +62,9 @@ class InferenceService:
 
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         model = YOLO(model_path)
-        result = model.predict(image, conf=self.settings.confidence_threshold, verbose=False)[0]
+        result = model.predict(
+            image, conf=self.settings.confidence_threshold, verbose=False
+        )[0]
 
         boxes: list[dict[str, float]] = []
         confidences: list[float] = []
@@ -77,8 +83,14 @@ class InferenceService:
             )
             confidences.append(conf)
 
-        confidence_avg = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
-        return {"detected_count": len(boxes), "boxes": boxes, "confidence_avg": confidence_avg}
+        confidence_avg = (
+            round(sum(confidences) / len(confidences), 4) if confidences else 0.0
+        )
+        return {
+            "detected_count": len(boxes),
+            "boxes": boxes,
+            "confidence_avg": confidence_avg,
+        }
 
     def _mock_predict(self, image_bytes: bytes) -> dict[str, Any]:
         seed = int(hashlib.sha256(image_bytes).hexdigest()[:8], 16)
@@ -95,4 +107,8 @@ class InferenceService:
                 }
             )
         confidence_avg = round(sum(b["conf"] for b in boxes) / len(boxes), 4)
-        return {"detected_count": len(boxes), "boxes": boxes, "confidence_avg": confidence_avg}
+        return {
+            "detected_count": len(boxes),
+            "boxes": boxes,
+            "confidence_avg": confidence_avg,
+        }

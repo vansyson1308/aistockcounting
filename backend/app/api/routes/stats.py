@@ -9,7 +9,9 @@ from app.schemas.stats import StatsResponse
 router = APIRouter(prefix="", tags=["Analytics"])
 
 
-@router.get("/stats", response_model=StatsResponse, summary="Aggregate counting statistics")
+@router.get(
+    "/stats", response_model=StatsResponse, summary="Aggregate counting statistics"
+)
 async def get_stats(db: AsyncSession = Depends(get_db)) -> StatsResponse:
     query = select(
         func.count(Count.id),

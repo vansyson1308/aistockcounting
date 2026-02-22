@@ -24,7 +24,9 @@ class StorageService:
         if self.bucket not in buckets:
             self.client.create_bucket(Bucket=self.bucket)
 
-    def save_image_and_thumbnail(self, image_bytes: bytes, filename: str) -> tuple[str, str | None]:
+    def save_image_and_thumbnail(
+        self, image_bytes: bytes, filename: str
+    ) -> tuple[str, str | None]:
         self.ensure_bucket()
 
         ext = Path(filename).suffix.lower()
@@ -33,7 +35,12 @@ class StorageService:
 
         object_key = f"uploads/{uuid.uuid4().hex}{ext}"
         content_type = "image/png" if ext == ".png" else "image/jpeg"
-        self.client.put_object(Bucket=self.bucket, Key=object_key, Body=image_bytes, ContentType=content_type)
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=object_key,
+            Body=image_bytes,
+            ContentType=content_type,
+        )
 
         thumbnail_key: str | None = None
         try:

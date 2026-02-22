@@ -22,18 +22,22 @@ router = APIRouter(prefix="", tags=["Records"])
                         "detected_count": 12,
                         "manual_count": 11,
                         "confidence_avg": 0.81,
-                        "boxes_json": [{"x": 10, "y": 20, "w": 30, "h": 40, "conf": 0.9}],
+                        "boxes_json": [
+                            {"x": 10, "y": 20, "w": 30, "h": 40, "conf": 0.9}
+                        ],
                         "staff_id": "EMP-001",
                         "tray_id": "TRAY-A1",
                         "is_ai_correct": False,
-                        "notes": "Hidden item at corner"
+                        "notes": "Hidden item at corner",
                     }
                 }
             }
         }
     },
 )
-async def save_count(payload: SaveRequest, db: AsyncSession = Depends(get_db)) -> SaveResponse:
+async def save_count(
+    payload: SaveRequest, db: AsyncSession = Depends(get_db)
+) -> SaveResponse:
     row = Count(**payload.model_dump())
     db.add(row)
     await db.commit()

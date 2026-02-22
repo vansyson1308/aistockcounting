@@ -3,7 +3,11 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from app.schemas.count import CountResponse
 from app.services.inference import InferenceService
 from app.services.storage import StorageService
-from app.utils.image_validation import validate_decodable_image, validate_file_size, validate_file_type
+from app.utils.image_validation import (
+    validate_decodable_image,
+    validate_file_size,
+    validate_file_type,
+)
 
 router = APIRouter(prefix="", tags=["Counting"])
 
@@ -38,7 +42,9 @@ async def count_items(
     validate_file_size(payload)
     validate_decodable_image(payload)
 
-    image_path, image_thumbnail = storage.save_image_and_thumbnail(payload, image.filename or "upload.jpg")
+    image_path, image_thumbnail = storage.save_image_and_thumbnail(
+        payload, image.filename or "upload.jpg"
+    )
     detection = await inference.predict(payload)
 
     return CountResponse(

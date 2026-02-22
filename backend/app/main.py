@@ -38,17 +38,32 @@ app.add_middleware(
 
 @app.exception_handler(HTTPException)
 async def http_exc_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    detail = exc.detail if isinstance(exc.detail, dict) else {"code": "HTTP_ERROR", "message": "Request failed."}
-    logger.warning("http_exception", extra={"request_id": getattr(request.state, "request_id", "n/a")})
-    return JSONResponse(status_code=exc.status_code, content={"success": False, "error": detail})
+    detail = (
+        exc.detail
+        if isinstance(exc.detail, dict)
+        else {"code": "HTTP_ERROR", "message": "Request failed."}
+    )
+    logger.warning(
+        "http_exception",
+        extra={"request_id": getattr(request.state, "request_id", "n/a")},
+    )
+    return JSONResponse(
+        status_code=exc.status_code, content={"success": False, "error": detail}
+    )
 
 
 @app.exception_handler(ValidationError)
 async def validation_exc_handler(request: Request, _: ValidationError) -> JSONResponse:
-    logger.warning("validation_exception", extra={"request_id": getattr(request.state, "request_id", "n/a")})
+    logger.warning(
+        "validation_exception",
+        extra={"request_id": getattr(request.state, "request_id", "n/a")},
+    )
     return JSONResponse(
         status_code=422,
-        content={"success": False, "error": {"code": "VALIDATION_ERROR", "message": "Invalid request."}},
+        content={
+            "success": False,
+            "error": {"code": "VALIDATION_ERROR", "message": "Invalid request."},
+        },
     )
 
 
@@ -60,7 +75,13 @@ async def unhandled_exc_handler(request: Request, exc: Exception) -> JSONRespons
     )
     return JSONResponse(
         status_code=500,
-        content={"success": False, "error": {"code": "INTERNAL_SERVER_ERROR", "message": "Unexpected server error."}},
+        content={
+            "success": False,
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "Unexpected server error.",
+            },
+        },
     )
 
 
@@ -89,7 +110,23 @@ async def api_health() -> dict[str, object]:
     return {"status": status, "checks": checks}
 
 
-app.include_router(count.router, prefix=settings.api_prefix, dependencies=[Depends(enforce_optional_auth)])
-app.include_router(save.router, prefix=settings.api_prefix, dependencies=[Depends(enforce_optional_auth)])
-app.include_router(history.router, prefix=settings.api_prefix, dependencies=[Depends(enforce_optional_auth)])
-app.include_router(stats.router, prefix=settings.api_prefix, dependencies=[Depends(enforce_optional_auth)])
+app.include_router(
+    count.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    save.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    history.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    stats.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)

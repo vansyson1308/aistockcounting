@@ -13,7 +13,11 @@ from app.schemas.history import HistoryResponse, HistorySingleResponse
 router = APIRouter(prefix="", tags=["Records"])
 
 
-@router.get("/history", response_model=HistoryResponse, summary="List count history with filters")
+@router.get(
+    "/history",
+    response_model=HistoryResponse,
+    summary="List count history with filters",
+)
 async def get_history(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -45,7 +49,9 @@ async def get_history(
 
     total = (await db.execute(cq)).scalar_one()
     rows = (
-        await db.execute(q.order_by(Count.created_at.desc()).offset((page - 1) * limit).limit(limit))
+        await db.execute(
+            q.order_by(Count.created_at.desc()).offset((page - 1) * limit).limit(limit)
+        )
     ).scalars()
 
     items = [
@@ -65,11 +71,19 @@ async def get_history(
         }
         for row in rows
     ]
-    return HistoryResponse(data={"items": items, "page": page, "limit": limit, "total": total})
+    return HistoryResponse(
+        data={"items": items, "page": page, "limit": limit, "total": total}
+    )
 
 
-@router.get("/history/{record_id}", response_model=HistorySingleResponse, summary="Get record detail")
-async def get_history_item(record_id: UUID, db: AsyncSession = Depends(get_db)) -> HistorySingleResponse:
+@router.get(
+    "/history/{record_id}",
+    response_model=HistorySingleResponse,
+    summary="Get record detail",
+)
+async def get_history_item(
+    record_id: UUID, db: AsyncSession = Depends(get_db)
+) -> HistorySingleResponse:
     row = (
         await db.execute(select(Count).where(Count.id == record_id).limit(1))
     ).scalar_one_or_none()

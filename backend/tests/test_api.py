@@ -1,4 +1,5 @@
 import pytest
+
 pytest.importorskip("PIL")
 pytest.importorskip("fastapi")
 
@@ -79,7 +80,9 @@ async def test_save_history_stats_flow(client, monkeypatch):
     save_res = await client.post("/api/v1/save", json=save_payload)
     assert save_res.status_code == 200
 
-    history_res = await client.get("/api/v1/history", params={"staff_id": "S2", "tray_id": "TR2"})
+    history_res = await client.get(
+        "/api/v1/history", params={"staff_id": "S2", "tray_id": "TR2"}
+    )
     assert history_res.status_code == 200
     assert history_res.json()["data"]["total"] == 1
 
@@ -102,7 +105,9 @@ async def test_history_detail_by_id(client, monkeypatch):
     b = io.BytesIO()
     image.save(b, format="JPEG")
 
-    count_res = await client.post("/api/v1/count-items", files={"image": ("x.jpg", b.getvalue(), "image/jpeg")})
+    count_res = await client.post(
+        "/api/v1/count-items", files={"image": ("x.jpg", b.getvalue(), "image/jpeg")}
+    )
     count_data = count_res.json()["data"]
 
     save_res = await client.post(

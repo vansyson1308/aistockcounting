@@ -25,7 +25,11 @@ def image_bytes() -> bytes:
 async def client() -> AsyncGenerator[object, None]:
     try:
         from httpx import ASGITransport, AsyncClient
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.ext.asyncio import (
+            AsyncSession,
+            async_sessionmaker,
+            create_async_engine,
+        )
     except ModuleNotFoundError as exc:
         pytest.skip(f"Missing test dependency: {exc.name}")
 
@@ -34,7 +38,9 @@ async def client() -> AsyncGenerator[object, None]:
     from app.main import app
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -45,7 +51,9 @@ async def client() -> AsyncGenerator[object, None]:
 
     app.dependency_overrides[get_db] = override_db
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
 
     app.dependency_overrides.clear()
