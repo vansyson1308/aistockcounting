@@ -1,0 +1,64 @@
+services:
+  cvat_db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cvat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvat}
+      POSTGRES_DB: ${POSTGRES_DB:-cvat}
+    volumes:
+      - cvat_db_data:/var/lib/postgresql/data
+
+  cvat_redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  cvat_server:
+    image: cvat/server:v2.13.0
+    restart: unless-stopped
+    depends_on:
+      - cvat_db
+      - cvat_redis
+    environment:
+      CVAT_REDIS_HOST: cvat_redis
+      CVAT_POSTGRES_HOST: cvat_db
+      CVAT_POSTGRES_PORT: 5432
+      CVAT_POSTGRES_USER: ${POSTGRES_USER:-cvat}
+      CVAT_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvat}
+      CVAT_POSTGRES_DBNAME: ${POSTGRES_DB:-cvat}
+      DJANGO_SUPERUSER_USERNAME: ${CVAT_USER:-admin}
+      DJANGO_SUPERUSER_PASSWORD: ${CVAT_PASS:-admin123}
+    ports:
+      - "127.0.0.1:${CVAT_SERVER_PORT:-8080}:8080"
+    volumes:
+      - cvat_data:/home/django/data
+      - cvat_keys:/home/django/keys
+
+  cvat_worker:
+    image: cvat/server:v2.13.0
+    restart: unless-stopped
+    depends_on:
+      - cvat_server
+    command: ["python3", "manage.py", "rqworker", "default"]
+    environment:
+      CVAT_REDIS_HOST: cvat_redis
+      CVAT_POSTGRES_HOST: cvat_db
+      CVAT_POSTGRES_PORT: 5432
+      CVAT_POSTGRES_USER: ${POSTGRES_USER:-cvat}
+      CVAT_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvat}
+      CVAT_POSTGRES_DBNAME: ${POSTGRES_DB:-cvat}
+    volumes:
+      - cvat_data:/home/django/data
+
+  cvat_ui:
+    image: cvat/ui:v2.13.0
+    restart: unless-stopped
+    depends_on:
+      - cvat_server
+    ports:
+      - "127.0.0.1:${CVAT_UI_PORT:-8081}:80"
+
+volumes:
+  cvat_db_data:
+  cvat_data:
+  cvat_keys:
