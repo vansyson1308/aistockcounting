@@ -1,10 +1,9 @@
+import io
+
 import pytest
 
 pytest.importorskip("fastapi")
 
-import io
-
-import pytest
 from fastapi import UploadFile
 from starlette.datastructures import Headers
 
