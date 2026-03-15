@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import audit_log
+from app.core.cache import invalidate
 from app.db.database import get_db
 from app.models.count import Count
 from app.schemas.save import SaveRequest, SaveResponse
@@ -42,4 +44,6 @@ async def save_count(
     db.add(row)
     await db.commit()
     await db.refresh(row)
+    audit_log("SAVE", payload.staff_id, {"record_id": str(row.id)})
+    invalidate()
     return SaveResponse(data={"id": row.id, "created_at": row.created_at})

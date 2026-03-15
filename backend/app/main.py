@@ -1,14 +1,17 @@
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
+from prometheus_client import generate_latest
 from pydantic import ValidationError
 
-from app.api.routes import count, history, save, stats
+from app.api.routes import count, export, history, save, stats
 from app.core.auth import enforce_optional_auth
 from app.core.config import get_settings
 from app.core.logging import RequestContextMiddleware, setup_logging
+from app.core.metrics_middleware import PrometheusMiddleware
 from app.core.rate_limit import InMemoryRateLimitMiddleware
 from app.db.database import engine
+from app.services.inference import InferenceService
 from app.services.storage import StorageService
 
 settings = get_settings()
@@ -26,6 +29,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(PrometheusMiddleware)
 app.add_middleware(InMemoryRateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -90,6 +94,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/metrics", tags=["System"])
+async def metrics() -> PlainTextResponse:
+    return PlainTextResponse(generate_latest(), media_type="text/plain; version=0.0.4")
+
+
 @app.get("/api/health", tags=["System"])
 async def api_health() -> dict[str, object]:
     checks = {"db": False, "minio": False}
@@ -107,7 +116,14 @@ async def api_health() -> dict[str, object]:
         logger.warning("health_minio_check_failed")
 
     status = "ok" if all(checks.values()) else "degraded"
-    return {"status": status, "checks": checks}
+    return {
+        "status": status,
+        "checks": checks,
+        "model": {
+            "loaded": InferenceService.is_model_loaded(),
+            "version": settings.model_version,
+        },
+    }
 
 
 app.include_router(
@@ -127,6 +143,11 @@ app.include_router(
 )
 app.include_router(
     stats.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    export.router,
     prefix=settings.api_prefix,
     dependencies=[Depends(enforce_optional_auth)],
 )

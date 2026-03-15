@@ -30,7 +30,7 @@ export default function CameraCapture({ onCapture }: Props) {
       if (!blob) return;
       const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
       onCapture(file, URL.createObjectURL(blob));
-    }, 'image/jpeg', 0.9);
+    }, 'image/jpeg', 0.85);
   };
 
   return (

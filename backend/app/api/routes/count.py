@@ -1,5 +1,8 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
+from app.core.audit import audit_log
 from app.schemas.count import CountResponse
 from app.services.inference import InferenceService
 from app.services.storage import StorageService
@@ -42,10 +45,19 @@ async def count_items(
     validate_file_size(payload)
     validate_decodable_image(payload)
 
-    image_path, image_thumbnail = storage.save_image_and_thumbnail(
-        payload, image.filename or "upload.jpg"
+    storage_task = asyncio.to_thread(
+        storage.save_image_and_thumbnail, payload, image.filename or "upload.jpg"
     )
-    detection = await inference.predict(payload)
+    inference_task = inference.predict(payload)
+    (image_path, image_thumbnail), detection = await asyncio.gather(
+        storage_task, inference_task
+    )
+
+    audit_log(
+        "COUNT",
+        staff_id,
+        {"tray_id": tray_id, "detected_count": detection["detected_count"]},
+    )
 
     return CountResponse(
         data={

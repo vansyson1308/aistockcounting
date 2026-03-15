@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     enable_simple_auth: bool = False
     simple_auth_token: str = ""
     inference_concurrency_limit: int = 2
+    model_version: str = "v0001"
+
+    redis_url: str = "redis://redis:6379/0"
+    cache_ttl_seconds: int = 300
 
 
 @lru_cache

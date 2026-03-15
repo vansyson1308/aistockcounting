@@ -18,6 +18,8 @@ class CountResponseData(BaseModel):
     boxes: list[Box]
     tray_id: str | None = None
     staff_id: str | None = None
+    mock_mode: bool = False
+    model_version: str = "unknown"
 
 
 class CountResponse(BaseModel):

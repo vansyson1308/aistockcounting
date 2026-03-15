@@ -4,34 +4,44 @@ import { useMemo, useState } from 'react';
 
 import BoundingBoxOverlay from '@/components/BoundingBoxOverlay';
 import CameraCapture from '@/components/CameraCapture';
+import ImageViewer from '@/components/ImageViewer';
 import ManualOverride from '@/components/ManualOverride';
-import Toast from '@/components/Toast';
 import { ApiClientError, countItems, saveRecord } from '@/lib/api';
+import { compressImage } from '@/lib/image-compress';
 import { sanitizeText } from '@/lib/sanitize';
-import { CountResult } from '@/types';
+import { useScanStore } from '@/store/useScanStore';
+import { useSessionStore } from '@/store/useSessionStore';
+import { useToastStore } from '@/store/useToastStore';
 
 export default function ScanPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
+  const {
+    file, preview, result, manualCount, isAICorrect, notes, loading, status,
+    setFile, setResult, setManualCount, setIsAICorrect, setNotes, setLoading, setStatus, reset,
+  } = useScanStore();
+
+  const { staffId, setStaffId } = useSessionStore();
+  const showToast = useToastStore((s) => s.show);
+
   const [trayId, setTrayId] = useState('');
-  const [staffId, setStaffId] = useState('');
-  const [result, setResult] = useState<CountResult | null>(null);
-  const [manualCount, setManualCount] = useState<number | ''>('');
-  const [isAICorrect, setIsAICorrect] = useState<boolean | null>(null);
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [toast, setToast] = useState(false);
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
   const [imgDisplay, setImgDisplay] = useState({ w: 0, h: 0 });
+  const [compressionInfo, setCompressionInfo] = useState('');
 
   const detected = useMemo(() => result?.detected_count ?? 0, [result]);
 
-  const handleFile = (selected: File, url?: string) => {
-    setFile(selected);
-    setPreview(url || URL.createObjectURL(selected));
-    setResult(null);
-    setStatus('');
+  const handleFile = async (selected: File, url?: string) => {
+    const originalSize = selected.size;
+    const compressed = await compressImage(selected);
+    const newSize = compressed.size;
+    if (newSize < originalSize) {
+      const saved = ((1 - newSize / originalSize) * 100).toFixed(0);
+      setCompressionInfo(
+        `${(originalSize / 1024 / 1024).toFixed(1)}MB → ${(newSize / 1024 / 1024).toFixed(1)}MB (-${saved}%)`
+      );
+    } else {
+      setCompressionInfo('');
+    }
+    setFile(compressed, url);
   };
 
   const onUpload = async () => {
@@ -39,15 +49,10 @@ export default function ScanPage() {
     try {
       setLoading(true);
       setStatus('Đang xử lý ảnh...');
-      const safeTrayId = sanitizeText(trayId, 50);
-      const safeStaffId = sanitizeText(staffId, 50);
-      const data = await countItems(file, safeTrayId, safeStaffId);
+      const data = await countItems(file, sanitizeText(trayId, 50), sanitizeText(staffId, 50));
       setResult(data);
-      setManualCount(data.detected_count);
-      setStatus(`AI đếm ${data.detected_count} món (${data.processing_time_ms}ms).`);
     } catch (error) {
-      const message = error instanceof ApiClientError ? error.message : 'Không thể xử lý ảnh.';
-      setStatus(message);
+      setStatus(error instanceof ApiClientError ? error.message : 'Không thể xử lý ảnh.');
     } finally {
       setLoading(false);
     }
@@ -68,39 +73,41 @@ export default function ScanPage() {
         is_ai_correct: isAICorrect,
         notes: sanitizeText(notes, 500) || null,
       });
-      setToast(true);
+      showToast('Đã lưu bản ghi');
       setStatus('Đã lưu thành công.');
-      setTimeout(() => setToast(false), 1600);
     } catch (error) {
-      const message = error instanceof ApiClientError ? error.message : 'Lưu thất bại.';
-      setStatus(message);
+      setStatus(error instanceof ApiClientError ? error.message : 'Lưu thất bại.');
     }
   };
 
   const resetForNext = () => {
-    setFile(null);
-    setPreview('');
-    setResult(null);
-    setManualCount('');
-    setIsAICorrect(null);
-    setNotes('');
-    setStatus('Sẵn sàng kiểm kê khay tiếp theo.');
+    reset();
+    setTrayId('');
+    setCompressionInfo('');
   };
 
   return (
     <section className="space-y-4">
       <h1 className="text-xl font-bold">Kiểm kê khay mới</h1>
 
-      <div className="rounded-xl bg-white p-4 shadow">
+      <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
         <label className="mb-1 block text-sm font-medium">Mã khay (tuỳ chọn)</label>
-        <input value={trayId} onChange={(e) => setTrayId(e.target.value)} className="mb-3 w-full rounded-lg border p-3" />
+        <input
+          value={trayId}
+          onChange={(e) => setTrayId(e.target.value)}
+          className="mb-3 w-full rounded-lg border border-slate-300 p-3 dark:border-slate-600 dark:bg-slate-700"
+        />
         <label className="mb-1 block text-sm font-medium">Mã nhân viên (tuỳ chọn)</label>
-        <input value={staffId} onChange={(e) => setStaffId(e.target.value)} className="w-full rounded-lg border p-3" />
+        <input
+          value={staffId}
+          onChange={(e) => setStaffId(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 p-3 dark:border-slate-600 dark:bg-slate-700"
+        />
       </div>
 
       <CameraCapture onCapture={handleFile} />
 
-      <div className="rounded-xl bg-white p-4 shadow">
+      <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
         <label className="mb-2 block text-sm font-medium">Hoặc tải ảnh lên</label>
         <input
           type="file"
@@ -112,23 +119,29 @@ export default function ScanPage() {
           }}
           className="w-full text-sm"
         />
+        {compressionInfo && (
+          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">{compressionInfo}</p>
+        )}
       </div>
 
-      <button onClick={onUpload} disabled={loading} className="w-full rounded-xl bg-indigo-600 p-3 font-semibold text-white disabled:opacity-60">
+      <button
+        onClick={onUpload}
+        disabled={loading}
+        className="w-full rounded-xl bg-indigo-600 p-3 font-semibold text-white disabled:opacity-60 hover:bg-indigo-700"
+      >
         {loading ? 'Đang xử lý...' : 'Đếm bằng AI'}
       </button>
 
       {preview && (
-        <div className="relative overflow-hidden rounded-xl bg-black">
-          <img
-            src={preview}
-            alt="Ảnh kiểm kê"
-            className="h-auto w-full"
-            onLoad={(event) => {
-              setImgNatural({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight });
-              setImgDisplay({ w: event.currentTarget.clientWidth, h: event.currentTarget.clientHeight });
-            }}
-          />
+        <ImageViewer
+          src={preview}
+          alt="Ảnh kiểm kê"
+          onLoad={(event) => {
+            const el = event.currentTarget as HTMLImageElement;
+            setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
+            setImgDisplay({ w: el.clientWidth, h: el.clientHeight });
+          }}
+        >
           {result && (
             <BoundingBoxOverlay
               boxes={result.boxes}
@@ -138,15 +151,23 @@ export default function ScanPage() {
               displayHeight={imgDisplay.h}
             />
           )}
+        </ImageViewer>
+      )}
+
+      {result?.mock_mode && (
+        <div className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+          AI model chưa sẵn sàng — kết quả là mô phỏng
         </div>
       )}
 
       {result && (
         <div className="space-y-3">
-          <div className="rounded-xl bg-white p-4 shadow">
-            <p className="text-sm text-slate-600">Kết quả AI</p>
+          <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
+            <p className="text-sm text-slate-600 dark:text-slate-400">Kết quả AI</p>
             <p className="text-2xl font-bold">{detected} món</p>
-            <p className="text-sm text-slate-500">Độ tin cậy TB: {(result.confidence_avg * 100).toFixed(1)}%</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Độ tin cậy TB: {(result.confidence_avg * 100).toFixed(1)}%
+            </p>
           </div>
 
           <ManualOverride
@@ -159,14 +180,17 @@ export default function ScanPage() {
           />
 
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={onSave} className="rounded-xl bg-emerald-600 p-3 font-semibold text-white">Lưu</button>
-            <button onClick={resetForNext} className="rounded-xl bg-slate-700 p-3 font-semibold text-white">Quét khay tiếp</button>
+            <button onClick={onSave} className="rounded-xl bg-emerald-600 p-3 font-semibold text-white hover:bg-emerald-700">
+              Lưu
+            </button>
+            <button onClick={resetForNext} className="rounded-xl bg-slate-700 p-3 font-semibold text-white hover:bg-slate-600">
+              Quét khay tiếp
+            </button>
           </div>
         </div>
       )}
 
-      {status && <p className="text-sm text-slate-700">{status}</p>}
-      <Toast message="Đã lưu bản ghi" show={toast} />
+      {status && <p className="text-sm text-slate-700 dark:text-slate-300">{status}</p>}
     </section>
   );
 }

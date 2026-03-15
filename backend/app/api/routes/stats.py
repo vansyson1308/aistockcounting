@@ -1,18 +1,26 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cache_key, get_cached, set_cached
 from app.db.database import get_db
 from app.models.count import Count
 from app.schemas.stats import StatsResponse
 
 router = APIRouter(prefix="", tags=["Analytics"])
 
+_STATS_CACHE_KEY = cache_key("stats", "aggregate")
+
 
 @router.get(
     "/stats", response_model=StatsResponse, summary="Aggregate counting statistics"
 )
-async def get_stats(db: AsyncSession = Depends(get_db)) -> StatsResponse:
+async def get_stats(db: AsyncSession = Depends(get_db)) -> JSONResponse:
+    cached = get_cached(_STATS_CACHE_KEY)
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"X-Cache": "HIT"})
+
     query = select(
         func.count(Count.id),
         func.coalesce(func.avg(Count.detected_count), 0.0),
@@ -20,7 +28,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)) -> StatsResponse:
         func.coalesce(func.avg(case((Count.is_ai_correct.is_(True), 1), else_=0)), 0.0),
     )
     total, avg_detected, avg_manual, ai_correct_rate = (await db.execute(query)).one()
-    return StatsResponse(
+    result = StatsResponse(
         data={
             "total_records": int(total),
             "avg_detected_count": float(avg_detected),
@@ -28,3 +36,6 @@ async def get_stats(db: AsyncSession = Depends(get_db)) -> StatsResponse:
             "ai_correct_rate": float(ai_correct_rate),
         }
     )
+    body = result.model_dump()
+    set_cached(_STATS_CACHE_KEY, body, ttl=300)
+    return JSONResponse(content=body, headers={"X-Cache": "MISS"})

@@ -50,7 +50,7 @@ def main() -> None:
     onnx_error = None
     try:
       model = YOLO(str(dst_pt))
-      model.export(format="onnx")
+      model.export(format="onnx", opset=17)
       produced = dst_pt.with_suffix(".onnx")
       if produced.exists():
           shutil.move(str(produced), onnx_path)

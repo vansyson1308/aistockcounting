@@ -16,6 +16,8 @@ export type CountResult = {
   boxes: Box[];
   tray_id?: string | null;
   staff_id?: string | null;
+  mock_mode?: boolean;
+  model_version?: string;
 };
 
 export type SavePayload = {

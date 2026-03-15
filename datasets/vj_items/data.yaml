@@ -1,4 +1,4 @@
-path: datasets/vj_items
+path: vj_items
 train: images/train
 val: images/val
 test: images/test

@@ -2,9 +2,11 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cache_key, get_cached, set_cached
 from app.core.errors import api_error
 from app.db.database import get_db
 from app.models.count import Count
@@ -27,7 +29,21 @@ async def get_history(
     tray_id: str | None = Query(default=None),
     ai_correct: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-) -> HistoryResponse:
+) -> JSONResponse | HistoryResponse:
+    ck = cache_key(
+        "history",
+        str(page),
+        str(limit),
+        str(date_from),
+        str(date_to),
+        str(staff_id),
+        str(tray_id),
+        str(ai_correct),
+    )
+    cached = get_cached(ck)
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"X-Cache": "HIT"})
+
     q = select(Count)
     cq = select(func.count(Count.id))
 
@@ -71,9 +87,12 @@ async def get_history(
         }
         for row in rows
     ]
-    return HistoryResponse(
+    result = HistoryResponse(
         data={"items": items, "page": page, "limit": limit, "total": total}
     )
+    body = result.model_dump(mode="json")
+    set_cached(ck, body, ttl=120)
+    return JSONResponse(content=body, headers={"X-Cache": "MISS"})
 
 
 @router.get(

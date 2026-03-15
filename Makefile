@@ -50,7 +50,8 @@ label-export-images:
 
 dataset-split:
 	python tools/labeling/split_dataset.py --in datasets/vj_items/images/all --seed $${SEED:-42}
-	@echo "Next: make cvat-create-task FOLDER=datasets/vj_items/images/all NAME=vj-items"
+	@echo "Images and labels split into train/val/test"
+	@echo "Next: make dataset-validate"
 
 dataset-validate:
 	python tools/labeling/validate_dataset.py --root datasets/vj_items
@@ -77,6 +78,14 @@ eval-yolo:
 export-model:
 	python training/scripts/export.py --version $${VERSION:?Set VERSION=v0001} --run-dir $${RUN_DIR:?Set RUN_DIR=outputs/vj_items/<run_dir>}
 	@echo "Set MODEL_PT_PATH/MODEL_ONNX_PATH and run make model-smoke IMAGE=scripts/generated_sample.jpg"
+
+train-pipeline:
+	python training/scripts/train_pipeline.py --config training/configs/yolo_v1.yaml --version $${VERSION:?Set VERSION=v0001}
+
+train-all:
+	$(MAKE) dataset-split
+	$(MAKE) dataset-validate
+	$(MAKE) train-pipeline VERSION=$${VERSION:?Set VERSION=v0001}
 
 model-smoke:
 	python backend/tools/model_smoke_test.py --image $${IMAGE:?Set IMAGE=path/to/generated_sample.jpg}

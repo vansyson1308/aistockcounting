@@ -1,3 +1,4 @@
+# Environment
 .env
 .env.*
 !.env.example
@@ -5,6 +6,50 @@
 !.env.staging.example
 !.env.prod.example
 cvat/.env.cvat
-frontend/tsconfig.tsbuildinfo
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Model weights & training outputs (large binary files)
+/models/
+outputs/
+runs/
+*.pt
+*.onnx
+yolov8n.pt
+
+# Dataset images (keep labels, exclude generated images and caches)
+datasets/vj_items/images/all/
+datasets/vj_items/images/train/
+datasets/vj_items/images/val/
+datasets/vj_items/images/test/
+datasets/vj_items/labels/all/
+datasets/vj_items/labels/train/
+datasets/vj_items/labels/val/
+datasets/vj_items/labels/test/
+datasets/vj_items/labels/*.cache
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

@@ -52,6 +52,11 @@ export async function getStats(): Promise<StatsData> {
   return parseResponse<StatsData>(res);
 }
 
+export function downloadExportCsv(filters?: Record<string, string>): void {
+  const params = new URLSearchParams(filters);
+  window.open(`${API_BASE}/export/csv?${params.toString()}`, '_blank');
+}
+
 export function buildImageUrl(path?: string | null): string {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;

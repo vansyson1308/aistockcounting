@@ -1,4 +1,6 @@
 import io
+import logging
+import time
 import uuid
 from pathlib import Path
 
@@ -6,6 +8,8 @@ import boto3
 from PIL import Image
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class StorageService:
@@ -24,6 +28,28 @@ class StorageService:
         if self.bucket not in buckets:
             self.client.create_bucket(Bucket=self.bucket)
 
+    def _put_with_retry(
+        self, key: str, body: bytes, content_type: str, retries: int = 3
+    ) -> None:
+        for attempt in range(retries):
+            try:
+                self.client.put_object(
+                    Bucket=self.bucket, Key=key, Body=body, ContentType=content_type
+                )
+                return
+            except Exception:
+                if attempt == retries - 1:
+                    raise
+                wait = 0.5 * (attempt + 1)
+                logger.warning(
+                    "put_object failed for %s (attempt %d/%d), retrying in %.1fs",
+                    key,
+                    attempt + 1,
+                    retries,
+                    wait,
+                )
+                time.sleep(wait)
+
     def save_image_and_thumbnail(
         self, image_bytes: bytes, filename: str
     ) -> tuple[str, str | None]:
@@ -35,12 +61,7 @@ class StorageService:
 
         object_key = f"uploads/{uuid.uuid4().hex}{ext}"
         content_type = "image/png" if ext == ".png" else "image/jpeg"
-        self.client.put_object(
-            Bucket=self.bucket,
-            Key=object_key,
-            Body=image_bytes,
-            ContentType=content_type,
-        )
+        self._put_with_retry(object_key, image_bytes, content_type)
 
         thumbnail_key: str | None = None
         try:
@@ -49,13 +70,11 @@ class StorageService:
             buf = io.BytesIO()
             image.save(buf, format="JPEG", quality=80)
             thumbnail_key = f"thumbnails/{uuid.uuid4().hex}.jpg"
-            self.client.put_object(
-                Bucket=self.bucket,
-                Key=thumbnail_key,
-                Body=buf.getvalue(),
-                ContentType="image/jpeg",
-            )
+            self._put_with_retry(thumbnail_key, buf.getvalue(), "image/jpeg")
         except Exception:
+            logger.warning(
+                "Thumbnail generation failed for %s", object_key, exc_info=True
+            )
             thumbnail_key = None
 
         return object_key, thumbnail_key
