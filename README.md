@@ -1,4 +1,6 @@
-# VietJewelers AI Stock Counting MVP v0.1.0
+# VietJewelers Inventory Truth Layer
+
+AI-assisted jewelry inventory audit system for tray photos, POS reconciliation, discrepancy resolution, and retraining feedback. The product direction is no longer just "count items in one image"; it is a visual evidence layer for catching stock variance before it becomes expensive shrink.
 
 ## Local production-like deployment (Docker Compose + Nginx)
 1. `cp .env.example .env`
@@ -8,6 +10,17 @@
    - App: `http://localhost`
    - Backend health: `http://localhost/api/health`
    - MinIO console: `http://localhost:9001`
+
+## Inventory truth layer workflow
+- New audit scan API: `POST /api/v1/scans` uploads a tray image, runs AI counting, checks image quality, compares against expected/POS stock, and opens a discrepancy when counts differ.
+- Review API: `PATCH /api/v1/scans/{id}/review` stores manual recounts and turns corrections into active-learning data for retraining.
+- Discrepancy inbox: `GET /api/v1/discrepancies` and `POST /api/v1/discrepancies/{id}/resolve` manage stock variance through resolution.
+- KiotViet pilot path:
+  - `POST /api/v1/integrations/kiotviet/inventory-snapshots` imports POS stock snapshots.
+  - `POST /api/v1/integrations/kiotviet/webhook` records webhook events idempotently.
+  - `POST /api/v1/integrations/kiotviet/csv` imports CSV exports when API credentials are not ready.
+  - `GET /api/v1/integrations/kiotviet/status` shows connector/snapshot health.
+- Evidence images are served through `/api/v1/images/object/{path}` or short-lived URLs via `/api/v1/images/presigned`.
 
 ## Production-lite ship
 - Release/versioning: `RELEASE.md`, `CHANGELOG.md`, `docs/release-checklist.md`
@@ -62,6 +75,8 @@ docker compose --env-file .env.staging.example -f docker-compose.staging.yml up 
 - Staging: `.env.staging.example`
 - Production-lite: `.env.prod.example`
 - CVAT: `.env.cvat.example` -> `cvat/.env.cvat`
+- KiotViet connector envs: `KIOTVIET_CLIENT_ID`, `KIOTVIET_CLIENT_SECRET`, `KIOTVIET_RETAILER`; leave blank to use CSV fallback.
+- Multi-tenant pilot key: `DEFAULT_TENANT_KEY` and optional `X-TENANT-KEY` request header.
 
 ## Operability notes
 - `/api/health` checks DB + MinIO reachability.

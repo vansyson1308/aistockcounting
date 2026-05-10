@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 import boto3
+from botocore.response import StreamingBody
 from PIL import Image
 
 from app.core.config import get_settings
@@ -78,3 +79,14 @@ class StorageService:
             thumbnail_key = None
 
         return object_key, thumbnail_key
+
+    def presign_get_url(self, key: str, expires_in: int = 900) -> str:
+        return self.client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self.bucket, "Key": key},
+            ExpiresIn=expires_in,
+        )
+
+    def get_object_stream(self, key: str) -> tuple[StreamingBody, str]:
+        obj = self.client.get_object(Bucket=self.bucket, Key=key)
+        return obj["Body"], obj.get("ContentType") or "application/octet-stream"

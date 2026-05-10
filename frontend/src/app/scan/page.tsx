@@ -5,146 +5,229 @@ import { useMemo, useState } from 'react';
 import BoundingBoxOverlay from '@/components/BoundingBoxOverlay';
 import CameraCapture from '@/components/CameraCapture';
 import ImageViewer from '@/components/ImageViewer';
-import ManualOverride from '@/components/ManualOverride';
-import { ApiClientError, countItems, saveRecord } from '@/lib/api';
+import { ApiClientError, buildImageUrl, createAuditScan, reviewAuditScan } from '@/lib/api';
 import { compressImage } from '@/lib/image-compress';
 import { sanitizeText } from '@/lib/sanitize';
-import { useScanStore } from '@/store/useScanStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useToastStore } from '@/store/useToastStore';
+import { ScanCreateData } from '@/types';
+
+const currency = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+
+function parseOptionalNumber(value: string): number | null {
+  if (value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export default function ScanPage() {
-  const {
-    file, preview, result, manualCount, isAICorrect, notes, loading, status,
-    setFile, setResult, setManualCount, setIsAICorrect, setNotes, setLoading, setStatus, reset,
-  } = useScanStore();
-
   const { staffId, setStaffId } = useSessionStore();
   const showToast = useToastStore((s) => s.show);
 
-  const [trayId, setTrayId] = useState('');
+  const [branchCode, setBranchCode] = useState('MAIN');
+  const [trayCode, setTrayCode] = useState('');
+  const [expectedCount, setExpectedCount] = useState('');
+  const [unitValue, setUnitValue] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [compressionInfo, setCompressionInfo] = useState('');
+  const [result, setResult] = useState<ScanCreateData | null>(null);
+  const [manualCount, setManualCount] = useState('');
+  const [isAICorrect, setIsAICorrect] = useState<boolean | null>(null);
+  const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
   const [imgDisplay, setImgDisplay] = useState({ w: 0, h: 0 });
-  const [compressionInfo, setCompressionInfo] = useState('');
 
-  const detected = useMemo(() => result?.detected_count ?? 0, [result]);
+  const scan = result?.scan;
+  const variance = scan?.variance_count ?? null;
+  const qualityFlags = scan?.quality_flags ?? [];
+  const displaySrc = preview || buildImageUrl(scan?.image_path);
+
+  const reviewCount = useMemo(() => {
+    if (manualCount.trim() !== '') return parseOptionalNumber(manualCount);
+    return scan?.final_count ?? null;
+  }, [manualCount, scan?.final_count]);
 
   const handleFile = async (selected: File, url?: string) => {
     const originalSize = selected.size;
     const compressed = await compressImage(selected);
-    const newSize = compressed.size;
-    if (newSize < originalSize) {
-      const saved = ((1 - newSize / originalSize) * 100).toFixed(0);
+    const savedUrl = url || URL.createObjectURL(compressed);
+    if (compressed.size < originalSize) {
+      const saved = ((1 - compressed.size / originalSize) * 100).toFixed(0);
       setCompressionInfo(
-        `${(originalSize / 1024 / 1024).toFixed(1)}MB → ${(newSize / 1024 / 1024).toFixed(1)}MB (-${saved}%)`
+        `${(originalSize / 1024 / 1024).toFixed(1)}MB -> ${(compressed.size / 1024 / 1024).toFixed(1)}MB (-${saved}%)`,
       );
     } else {
       setCompressionInfo('');
     }
-    setFile(compressed, url);
+    setFile(compressed);
+    setPreview(savedUrl);
+    setResult(null);
+    setStatus('');
   };
 
-  const onUpload = async () => {
-    if (!file) return setStatus('Vui lòng chụp hoặc chọn ảnh.');
+  const runAudit = async () => {
+    if (!file) return setStatus('Chon hoac chup anh khay truoc.');
+    if (!trayCode.trim()) return setStatus('Nhap ma khay de doi soat.');
+
     try {
       setLoading(true);
-      setStatus('Đang xử lý ảnh...');
-      const data = await countItems(file, sanitizeText(trayId, 50), sanitizeText(staffId, 50));
+      setStatus('Dang tao audit scan...');
+      const data = await createAuditScan(file, {
+        branchCode: sanitizeText(branchCode, 80) || 'MAIN',
+        trayCode: sanitizeText(trayCode, 80),
+        staffId: sanitizeText(staffId, 50),
+        expectedCount: parseOptionalNumber(expectedCount),
+        unitValue: parseOptionalNumber(unitValue),
+      });
       setResult(data);
+      setManualCount(String(data.scan.final_count));
+      setStatus(data.discrepancy ? 'Phat hien lech ton kho.' : 'Scan da san sang review.');
     } catch (error) {
-      setStatus(error instanceof ApiClientError ? error.message : 'Không thể xử lý ảnh.');
+      setStatus(error instanceof ApiClientError ? error.message : 'Khong the tao audit scan.');
     } finally {
       setLoading(false);
     }
   };
 
-  const onSave = async () => {
-    if (!result) return;
+  const submitReview = async () => {
+    if (!scan) return;
     try {
-      await saveRecord({
-        image_path: result.image_path,
-        image_thumbnail: result.image_thumbnail,
-        detected_count: result.detected_count,
-        manual_count: manualCount === '' ? null : manualCount,
-        confidence_avg: result.confidence_avg,
-        boxes_json: result.boxes,
-        staff_id: sanitizeText(staffId, 50) || null,
-        tray_id: sanitizeText(trayId, 50) || null,
+      setReviewing(true);
+      const data = await reviewAuditScan(scan.id, {
+        manual_count: reviewCount,
+        expected_count: parseOptionalNumber(expectedCount) ?? scan.expected_count ?? null,
+        unit_value: parseOptionalNumber(unitValue),
         is_ai_correct: isAICorrect,
         notes: sanitizeText(notes, 500) || null,
       });
-      showToast('Đã lưu bản ghi');
-      setStatus('Đã lưu thành công.');
+      setResult(data);
+      showToast(data.discrepancy ? 'Da cap nhat lech ton kho' : 'Da review scan');
+      setStatus(data.discrepancy ? 'Discrepancy van mo.' : 'Scan da khop voi ton ky vong.');
     } catch (error) {
-      setStatus(error instanceof ApiClientError ? error.message : 'Lưu thất bại.');
+      setStatus(error instanceof ApiClientError ? error.message : 'Review that bai.');
+    } finally {
+      setReviewing(false);
     }
   };
 
-  const resetForNext = () => {
-    reset();
-    setTrayId('');
+  const resetFlow = () => {
+    setFile(null);
+    setPreview('');
+    setResult(null);
+    setManualCount('');
+    setNotes('');
+    setIsAICorrect(null);
+    setTrayCode('');
+    setExpectedCount('');
+    setUnitValue('');
     setCompressionInfo('');
+    setStatus('');
   };
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-xl font-bold">Kiểm kê khay mới</h1>
-
-      <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
-        <label className="mb-1 block text-sm font-medium">Mã khay (tuỳ chọn)</label>
-        <input
-          value={trayId}
-          onChange={(e) => setTrayId(e.target.value)}
-          className="mb-3 w-full rounded-lg border border-slate-300 p-3 dark:border-slate-600 dark:bg-slate-700"
-        />
-        <label className="mb-1 block text-sm font-medium">Mã nhân viên (tuỳ chọn)</label>
-        <input
-          value={staffId}
-          onChange={(e) => setStaffId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 p-3 dark:border-slate-600 dark:bg-slate-700"
-        />
+    <section className="space-y-5">
+      <div className="border-b border-slate-200 pb-4 dark:border-slate-700">
+        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+          Audit scan
+        </p>
+        <h1 className="mt-1 text-2xl font-bold">Doi soat khay bang hinh anh</h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          Chup khay, luu bang chung, so voi ton POS hoac so ky vong, roi xu ly lech ngay trong inbox.
+        </p>
       </div>
 
-      <CameraCapture onCapture={handleFile} />
+      <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 md:grid-cols-2">
+        <label className="text-sm font-medium">
+          Chi nhanh
+          <input
+            value={branchCode}
+            onChange={(e) => setBranchCode(e.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Ma khay
+          <input
+            value={trayCode}
+            onChange={(e) => setTrayCode(e.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Ma nhan vien
+          <input
+            value={staffId}
+            onChange={(e) => setStaffId(e.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Ton ky vong
+          <input
+            type="number"
+            min={0}
+            value={expectedCount}
+            onChange={(e) => setExpectedCount(e.target.value)}
+            placeholder="Lay tu KiotViet neu de trong"
+            className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+        <label className="text-sm font-medium md:col-span-2">
+          Gia tri uoc tinh moi mon
+          <input
+            type="number"
+            min={0}
+            value={unitValue}
+            onChange={(e) => setUnitValue(e.target.value)}
+            placeholder="Dung de tinh risk value cho discrepancy"
+            className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+      </div>
 
-      <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
-        <label className="mb-2 block text-sm font-medium">Hoặc tải ảnh lên</label>
-        <input
-          type="file"
-          accept="image/jpeg,image/png"
-          capture="environment"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
-          }}
-          className="w-full text-sm"
-        />
-        {compressionInfo && (
-          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">{compressionInfo}</p>
-        )}
+      <div className="space-y-3">
+        <CameraCapture onCapture={handleFile} />
+        <div className="rounded-lg border border-dashed border-slate-300 p-4 dark:border-slate-700">
+          <label className="block text-sm font-medium">Hoac tai anh len</label>
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            capture="environment"
+            onChange={(e) => {
+              const selected = e.target.files?.[0];
+              if (selected) handleFile(selected);
+            }}
+            className="mt-2 w-full text-sm"
+          />
+          {compressionInfo && <p className="mt-2 text-xs text-emerald-600">{compressionInfo}</p>}
+        </div>
       </div>
 
       <button
-        onClick={onUpload}
+        onClick={runAudit}
         disabled={loading}
-        className="w-full rounded-xl bg-indigo-600 p-3 font-semibold text-white disabled:opacity-60 hover:bg-indigo-700"
+        className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
       >
-        {loading ? 'Đang xử lý...' : 'Đếm bằng AI'}
+        {loading ? 'Dang doi soat...' : 'Tao audit scan'}
       </button>
 
-      {preview && (
+      {displaySrc && (
         <ImageViewer
-          src={preview}
-          alt="Ảnh kiểm kê"
+          src={displaySrc}
+          alt="Anh khay audit"
           onLoad={(event) => {
             const el = event.currentTarget as HTMLImageElement;
             setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
             setImgDisplay({ w: el.clientWidth, h: el.clientHeight });
           }}
         >
-          {result && (
+          {scan?.boxes_json && (
             <BoundingBoxOverlay
-              boxes={result.boxes}
+              boxes={scan.boxes_json}
               naturalWidth={imgNatural.w}
               naturalHeight={imgNatural.h}
               displayWidth={imgDisplay.w}
@@ -154,38 +237,89 @@ export default function ScanPage() {
         </ImageViewer>
       )}
 
-      {result?.mock_mode && (
-        <div className="rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-          AI model chưa sẵn sàng — kết quả là mô phỏng
-        </div>
-      )}
-
-      {result && (
-        <div className="space-y-3">
-          <div className="rounded-xl bg-white p-4 shadow dark:bg-slate-800">
-            <p className="text-sm text-slate-600 dark:text-slate-400">Kết quả AI</p>
-            <p className="text-2xl font-bold">{detected} món</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Độ tin cậy TB: {(result.confidence_avg * 100).toFixed(1)}%
-            </p>
+      {scan && (
+        <div className="space-y-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-xs text-slate-500">AI dem</p>
+              <p className="text-2xl font-bold">{scan.detected_count}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Ton ky vong</p>
+              <p className="text-2xl font-bold">{scan.expected_count ?? '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Lech</p>
+              <p className={`text-2xl font-bold ${variance ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {variance ?? '-'}
+              </p>
+            </div>
           </div>
 
-          <ManualOverride
-            manualCount={manualCount}
-            setManualCount={setManualCount}
-            isAICorrect={isAICorrect}
-            setIsAICorrect={setIsAICorrect}
-            notes={notes}
-            setNotes={setNotes}
-          />
+          {scan.variance_value !== null && scan.variance_value !== undefined && (
+            <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-800 dark:bg-rose-950/30 dark:text-rose-200">
+              Gia tri rui ro uoc tinh: <strong>{currency.format(scan.variance_value)}</strong>
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={onSave} className="rounded-xl bg-emerald-600 p-3 font-semibold text-white hover:bg-emerald-700">
-              Lưu
-            </button>
-            <button onClick={resetForNext} className="rounded-xl bg-slate-700 p-3 font-semibold text-white hover:bg-slate-600">
-              Quét khay tiếp
-            </button>
+          {qualityFlags.length > 0 && (
+            <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              Can chup lai neu co the: {qualityFlags.join(', ')}
+            </div>
+          )}
+
+          <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <label className="text-sm font-medium">
+              So sau khi dem lai
+              <input
+                type="number"
+                min={0}
+                value={manualCount}
+                onChange={(e) => setManualCount(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 p-2.5 dark:border-slate-600 dark:bg-slate-900"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAICorrect(true)}
+                className={`rounded-md border p-2.5 text-sm font-semibold ${
+                  isAICorrect === true ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
+                }`}
+              >
+                AI dung
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAICorrect(false)}
+                className={`rounded-md border p-2.5 text-sm font-semibold ${
+                  isAICorrect === false ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-300'
+                }`}
+              >
+                AI can sua
+              </button>
+            </div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ly do lech, mat hang bi che, POS chua dong bo..."
+              className="min-h-24 rounded-md border border-slate-300 p-2.5 text-sm dark:border-slate-600 dark:bg-slate-900"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={submitReview}
+                disabled={reviewing}
+                className="rounded-lg bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60 dark:bg-white dark:text-slate-900"
+              >
+                {reviewing ? 'Dang luu...' : 'Review & cap nhat'}
+              </button>
+              <button
+                onClick={resetFlow}
+                className="rounded-lg border border-slate-300 px-4 py-3 font-semibold transition hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800"
+              >
+                Khay tiep
+              </button>
+            </div>
           </div>
         </div>
       )}

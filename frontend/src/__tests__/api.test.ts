@@ -1,5 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ApiClientError, buildImageUrl, getStats, saveRecord } from '@/lib/api';
+import {
+  ApiClientError,
+  buildImageUrl,
+  createAuditScan,
+  getDiscrepancies,
+  getStats,
+  reviewAuditScan,
+  saveRecord,
+} from '@/lib/api';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -97,6 +105,56 @@ describe('buildImageUrl', () => {
   });
 
   it('returns relative paths as-is', () => {
-    expect(buildImageUrl('uploads/test.jpg')).toBe('uploads/test.jpg');
+    expect(buildImageUrl('uploads/test.jpg')).toContain('/images/object/uploads/test.jpg');
+  });
+});
+
+describe('truth-layer APIs', () => {
+  it('creates an audit scan as multipart form data', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { scan: { id: 'scan-1', status: 'pending_review' }, discrepancy: null },
+      }),
+    });
+
+    const file = new File(['x'], 'tray.jpg', { type: 'image/jpeg' });
+    const result = await createAuditScan(file, {
+      branchCode: 'HN-01',
+      trayCode: 'RING-A',
+      expectedCount: 12,
+    });
+
+    expect(result.scan.id).toBe('scan-1');
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/scans'),
+      expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+    );
+  });
+
+  it('reviews a scan and fetches the discrepancy inbox', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { scan: { id: 'scan-1', status: 'reviewed' }, discrepancy: null },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, data: { items: [], total: 0 } }),
+      });
+
+    await reviewAuditScan('scan-1', { manual_count: 12, expected_count: 12 });
+    const inbox = await getDiscrepancies(new URLSearchParams({ status: 'open' }));
+
+    expect(inbox.total).toBe(0);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/scans/scan-1/review'),
+      expect.objectContaining({ method: 'PATCH' }),
+    );
   });
 });

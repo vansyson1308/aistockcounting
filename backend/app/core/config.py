@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     cache_ttl_seconds: int = 300
 
+    default_tenant_key: str = "default"
+    kiotviet_client_id: str = ""
+    kiotviet_client_secret: str = ""
+    kiotviet_retailer: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

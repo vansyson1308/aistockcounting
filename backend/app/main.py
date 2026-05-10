@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import generate_latest
 from pydantic import ValidationError
 
-from app.api.routes import count, export, history, save, stats
+from app.api.routes import count, export, history, save, stats, truth
 from app.core.auth import enforce_optional_auth
 from app.core.config import get_settings
 from app.core.logging import RequestContextMiddleware, setup_logging
@@ -148,6 +148,11 @@ app.include_router(
 )
 app.include_router(
     export.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    truth.router,
     prefix=settings.api_prefix,
     dependencies=[Depends(enforce_optional_auth)],
 )
