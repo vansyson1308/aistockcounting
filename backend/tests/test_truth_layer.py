@@ -58,6 +58,81 @@ async def test_scan_creates_discrepancy_and_review_resolves(
 
 
 @pytest.mark.asyncio
+async def test_scan_uses_latest_pos_snapshot_and_keeps_tenants_isolated(
+    client, monkeypatch, image_bytes
+):
+    from app.services.inference import InferenceService
+    from app.services.storage import StorageService
+
+    monkeypatch.setattr(
+        StorageService,
+        "save_image_and_thumbnail",
+        lambda self, payload, name: ("uploads/pos.jpg", "thumbnails/pos.jpg"),
+    )
+
+    async def fixed_predict(self, payload):
+        return {
+            "detected_count": 7,
+            "boxes": [],
+            "confidence_avg": 0.91,
+            "processing_time_ms": 12,
+            "model_version": "test",
+        }
+
+    monkeypatch.setattr(InferenceService, "predict", fixed_predict)
+
+    await client.post(
+        "/api/v1/integrations/kiotviet/inventory-snapshots",
+        json={
+            "tenant_key": "tenant-a",
+            "items": [
+                {
+                    "branch_code": "HN-01",
+                    "tray_code": "RING-A",
+                    "expected_count": 7,
+                    "unit_value": 1000000,
+                }
+            ],
+        },
+    )
+    await client.post(
+        "/api/v1/integrations/kiotviet/inventory-snapshots",
+        json={
+            "tenant_key": "tenant-b",
+            "items": [
+                {
+                    "branch_code": "HN-01",
+                    "tray_code": "RING-A",
+                    "expected_count": 3,
+                    "unit_value": 1000000,
+                }
+            ],
+        },
+    )
+
+    matched = await client.post(
+        "/api/v1/scans",
+        files={"image": ("tray.jpg", image_bytes, "image/jpeg")},
+        data={"branch_code": "HN-01", "tray_code": "RING-A"},
+        headers={"X-TENANT-KEY": "tenant-a"},
+    )
+    assert matched.status_code == 200
+    assert matched.json()["data"]["scan"]["expected_count"] == 7
+    assert matched.json()["data"]["scan"]["status"] == "reviewed"
+    assert matched.json()["data"]["discrepancy"] is None
+
+    mismatched = await client.post(
+        "/api/v1/scans",
+        files={"image": ("tray.jpg", image_bytes, "image/jpeg")},
+        data={"branch_code": "HN-01", "tray_code": "RING-A"},
+        headers={"X-TENANT-KEY": "tenant-b"},
+    )
+    assert mismatched.status_code == 200
+    assert mismatched.json()["data"]["scan"]["expected_count"] == 3
+    assert mismatched.json()["data"]["discrepancy"]["variance_count"] == 4
+
+
+@pytest.mark.asyncio
 async def test_discrepancy_inbox_and_resolution(client, monkeypatch, image_bytes):
     from app.services.storage import StorageService
 
@@ -70,7 +145,11 @@ async def test_discrepancy_inbox_and_resolution(client, monkeypatch, image_bytes
     scan_res = await client.post(
         "/api/v1/scans",
         files={"image": ("tray.jpg", image_bytes, "image/jpeg")},
-        data={"branch_code": "SG-01", "tray_code": "BRACELET-B", "expected_count": "25"},
+        data={
+            "branch_code": "SG-01",
+            "tray_code": "BRACELET-B",
+            "expected_count": "25",
+        },
     )
     discrepancy = scan_res.json()["data"]["discrepancy"]
 
@@ -156,5 +235,7 @@ async def test_image_object_proxy_validates_path(client, monkeypatch):
     ok = await client.get("/api/v1/images/object/uploads/proof.jpg")
     assert ok.status_code == 200
 
-    bad = await client.get("/api/v1/images/presigned", params={"path": "uploads/../secret.jpg"})
+    bad = await client.get(
+        "/api/v1/images/presigned", params={"path": "uploads/../secret.jpg"}
+    )
     assert bad.status_code == 400

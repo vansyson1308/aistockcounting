@@ -49,7 +49,9 @@ from app.schemas.save import _validate_safe_path
 router = APIRouter(prefix="", tags=["Inventory Truth"])
 
 
-def tenant_key(x_tenant_key: str | None = Header(default=None, alias="X-TENANT-KEY")) -> str:
+def tenant_key(
+    x_tenant_key: str | None = Header(default=None, alias="X-TENANT-KEY")
+) -> str:
     return (x_tenant_key or get_settings().default_tenant_key).strip() or "default"
 
 
@@ -193,7 +195,9 @@ async def _upsert_discrepancy(
         scan.status = "reviewed"
         if existing is not None:
             existing.status = "resolved"
-            existing.resolution_note = "Auto-resolved after count matched expected stock."
+            existing.resolution_note = (
+                "Auto-resolved after count matched expected stock."
+            )
             existing.resolved_at = datetime.utcnow()
         return None
 
@@ -227,7 +231,9 @@ async def _upsert_discrepancy(
     return existing
 
 
-@router.post("/scans", response_model=ScanCreateResponse, summary="Create an audit scan")
+@router.post(
+    "/scans", response_model=ScanCreateResponse, summary="Create an audit scan"
+)
 async def create_scan(
     image: UploadFile = File(...),
     branch_code: str = Form(...),
@@ -343,7 +349,9 @@ async def review_scan(
     scan.is_ai_correct = payload.is_ai_correct
     scan.notes = payload.notes
     scan.variance_count = (
-        scan.final_count - scan.expected_count if scan.expected_count is not None else None
+        scan.final_count - scan.expected_count
+        if scan.expected_count is not None
+        else None
     )
     scan.variance_value = (
         float(scan.variance_count) * float(payload.unit_value)
@@ -359,7 +367,10 @@ async def review_scan(
         action="SCAN_REVIEWED",
         entity_type="scan_session",
         entity_id=str(scan.id),
-        payload={"manual_count": payload.manual_count, "variance_count": scan.variance_count},
+        payload={
+            "manual_count": payload.manual_count,
+            "variance_count": scan.variance_count,
+        },
     )
     await db.commit()
     await db.refresh(scan)
@@ -429,7 +440,9 @@ async def resolve_discrepancy(
     discrepancy.resolved_by = payload.resolved_by
     discrepancy.resolved_at = datetime.utcnow()
     scan = (
-        await db.execute(select(ScanSession).where(ScanSession.id == discrepancy.scan_id))
+        await db.execute(
+            select(ScanSession).where(ScanSession.id == discrepancy.scan_id)
+        )
     ).scalar_one_or_none()
     if scan is not None:
         scan.status = "reviewed" if payload.status == "resolved" else "ignored"
@@ -492,7 +505,9 @@ async def import_inventory_csv(
     imported = 0
     for row in reader:
         branch_code = row.get("branch_code") or row.get("branch") or "MAIN"
-        expected = row.get("expected_count") or row.get("quantity") or row.get("on_hand")
+        expected = (
+            row.get("expected_count") or row.get("quantity") or row.get("on_hand")
+        )
         if expected is None:
             continue
         unit_value_raw = row.get("unit_value") or row.get("price") or ""

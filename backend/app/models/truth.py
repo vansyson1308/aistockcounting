@@ -11,7 +11,9 @@ class Branch(Base):
     __tablename__ = "branches"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     branch_code: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     pos_branch_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -22,7 +24,9 @@ class Tray(Base):
     __tablename__ = "trays"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     branch_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     tray_code: Mapped[str] = mapped_column(String(80), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
@@ -36,7 +40,9 @@ class CatalogItem(Base):
     __tablename__ = "catalog_items"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     sku: Mapped[str] = mapped_column(String(80), nullable=False)
     name: Mapped[str] = mapped_column(String(240), nullable=False)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -49,7 +55,9 @@ class PosInventorySnapshot(Base):
     __tablename__ = "pos_inventory_snapshots"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     branch_code: Mapped[str] = mapped_column(String(80), nullable=False)
     sku: Mapped[str | None] = mapped_column(String(80), nullable=True)
     tray_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -65,7 +73,9 @@ class ScanSession(Base):
     __tablename__ = "scan_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     branch_code: Mapped[str] = mapped_column(String(80), nullable=False)
     tray_code: Mapped[str] = mapped_column(String(80), nullable=False)
     staff_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -83,7 +93,9 @@ class ScanSession(Base):
     quality_flags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     is_ai_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending_review")
+    status: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="pending_review"
+    )
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
@@ -97,7 +109,9 @@ class Discrepancy(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     scan_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     branch_code: Mapped[str] = mapped_column(String(80), nullable=False)
     tray_code: Mapped[str] = mapped_column(String(80), nullable=False)
     expected_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -116,7 +130,9 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
     actor_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -129,8 +145,12 @@ class PosSyncEvent(Base):
     __tablename__ = "pos_sync_events"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    tenant_key: Mapped[str] = mapped_column(String(80), nullable=False, default="default")
-    provider: Mapped[str] = mapped_column(String(40), nullable=False, default="kiotviet")
+    tenant_key: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="default"
+    )
+    provider: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="kiotviet"
+    )
     event_key: Mapped[str] = mapped_column(String(160), nullable=False)
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="processed")
