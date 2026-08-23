@@ -1,0 +1,32 @@
+{
+  "context": "**Primary dataset (SoccerTrack v2): NETWORK-BLOCKED in this environment** \u2014 huggingface.co (sole distribution channel) is denied by the environment egress policy (gateway CONNECT 403; alternates GDrive/Kaggle/hf-mirror/Zenodo/GitHub-Pages also denied; the reachable GitHub toolkit repo contains no data). This audit therefore covers the one real GT segment lawfully obtainable here: the SoccerTrack v1 sample (25 s, fixed wide-view full-pitch camera, 11v11) committed in github.com/AtomScott/SoccerTrack \u2014 used strictly as preparatory real-GT evidence for evaluator validation and the O1 oracle, never as Gate verdict evidence or training data. The same auditor runs unchanged against the full v2 snapshot at handoff (see ml/gate0a/fetch_data.md).",
+  "sequences": {
+    "v1_sample": {
+      "gt_path": "data/gate0a_prep/v1_sample/gt.txt",
+      "gt": {
+        "sha256": "cd2f1f4e2dc0eb8cac30fad960cd10d43bbbb568ac11676c7848e69ea03e1133",
+        "rows": 16500,
+        "invalid_boxes": 0,
+        "duplicate_frame_id": 0,
+        "frames": 750,
+        "frame_range": [
+          1,
+          750
+        ],
+        "frame_gaps": [],
+        "n_frame_gaps": 0,
+        "tracks": 22,
+        "track_intra_holes_total": 0,
+        "objects_per_frame_min_max": [
+          22,
+          22
+        ],
+        "bbox_extent_xmax_ymax": [
+          4286.0,
+          891.9
+        ],
+        "parse_issues": []
+      }
+    }
+  }
+}

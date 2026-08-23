@@ -1,0 +1,18 @@
+{
+  "gate": "0A",
+  "created_at": "2026-08-23T20:03:21+00:00",
+  "thresholds_sha256": "0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf",
+  "evidence": [
+    "reports/gate0a/environment.json",
+    "reports/gate0a/data_integrity.md",
+    "reports/gate0a/sanity_checks.json",
+    "reports/gate0a/oracle/oracle_ablation.csv",
+    "ml/gate0a/split_manifest.yaml",
+    "ml/gate0a/dense_eval_manifest.yaml",
+    "reports/gate0a/camsim_update/ranked_configs.csv",
+    "reports/gate0a/compute/profiling.csv"
+  ],
+  "status": "BLOCKED",
+  "verdict": null,
+  "reason": "REAL GPU + REAL v2-DATA GATE 0A NOT EXECUTED: this environment has no CUDA GPU (no authorized GPU environment exists for this account) AND the primary dataset's sole distribution host huggingface.co is denied by the environment network egress policy (gateway CONNECT 403; all alternates denied). All CPU+data-reachable stages were executed with real data (evaluator sanity A/B/C passed on real GT; O1 oracle real result HOTA 0.948 purity / 1.000 continuity; integrity audit; official split + dense-window procedure frozen; camsim re-ranked incl. Dn). Verdict issues only from the frozen runbook on a machine with huggingface.co access + CUDA GPU \u2014 see ml/gate0a/README.md steps 7-15 and ml/gate0a/fetch_data.md."
+}

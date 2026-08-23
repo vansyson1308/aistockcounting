@@ -1,0 +1,41 @@
+{
+  "recorded_at": "2026-08-23T19:55:00Z",
+  "purpose": "Gate 0A frozen experimental baseline (plan v1.1 section X.2-X.4)",
+  "git": {
+    "sha": "42ac382f61114f7e97eb2678a14c668b12b18142",
+    "branch": "claude/football-tracking-platform-plan-m9purv",
+    "pr": "vansyson1308/aistockcounting#2"
+  },
+  "thresholds_contract": {
+    "path": "ml/gate0a/thresholds.yaml",
+    "sha256": "0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf",
+    "policy": "immutable for this gate; never modified after seeing results"
+  },
+  "software": {
+    "python": "3.11.15",
+    "os": "Linux vm 6.18.44-fc-v21 x86_64 (Claude Code remote cloud container)",
+    "pip": "24.0"
+  },
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4,
+    "ram_gb": 15.7,
+    "gpu": null,
+    "gpu_evidence": "nvidia-smi absent, /dev/nvidia* absent, nvcc absent",
+    "cuda": null,
+    "nvidia_driver": null,
+    "disk_available_gb": 30
+  },
+  "gpu_runner_search": {
+    "checked_at": "2026-08-23T19:55:00Z",
+    "method": "claude-code-remote list_environments",
+    "result": "single environment 'Van Son' (anthropic_cloud) = this CPU container; no authorized GPU environment exists",
+    "consequence": "GPU-dependent stages (detector fine-tuning, GPU-scale inference) cannot be executed; per Gate 0A instructions section 17 the overall gate status will be BLOCKED unless CPU-valid evidence suffices, with a complete reproducible GPU handoff package produced"
+  },
+  "dependency_manifests_sha256": {
+    "ml/requirements.txt": "61b10317a2b0062dbedbe91fdafb35b32e73de1544622b6fd45ef19bc304f9a9",
+    "ml/requirements-dev.txt": "f7e4bc4876cea6966034429e55ee68a8f92e37a636340fa49ff03acf7d92cbe3",
+    "backend/requirements.txt": "b9399f8ab69f5772338d51a838deafa7c52a18ec49b807a87d34fd7efbaa5b9d"
+  },
+  "installed_experiment_env": ".venv-ml (numpy/scipy/pyyaml/pytest/ruff + trackeval from git); torch to be added CPU-only for ReID/detector stages, recorded on install"
+}

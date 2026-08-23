@@ -95,7 +95,7 @@ def evaluate_rig(
         open_grids.append(g_open)
         open_rates.append(r_open)
         set_rates.append(r_set)
-    if len(rig.cameras) > 1 and rig.name == "D":
+    if rig.multi_viewpoint and len(rig.cameras) > 1:
         occlusion_open = float(np.min(open_rates))
         occlusion_set = float(np.min(set_rates))
     else:

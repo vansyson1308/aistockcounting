@@ -1,0 +1,8 @@
+stage,status,hardware,value,unit,context
+online_tracking_o1,MEASURED,4-core Xeon 2.1GHz (no GPU),923.4,frames/s,22 objects/frame; GT boxes; purity tracker; ml.gate0a.runners.run_oracle
+online_tracking_o1_continuity,MEASURED,4-core Xeon 2.1GHz,~930,frames/s,ambiguity termination off
+trackeval_hota_native_metrics,MEASURED,4-core Xeon 2.1GHz,<2,s per 750-frame sequence,sanity + oracle scoring path
+camsim_full_sweep,MEASURED,4-core Xeon 2.1GHz,~5,s for 5 rigs x 3 heights,tools/camsim 1m grid + occlusion proxy
+detector_inference,BLOCKED,requires CUDA GPU,,,D-FINE / RT-DETRv2 fine-tune + tiled 4K inference not executable here
+reid_embedding,BLOCKED,requires video data (+GPU for scale),,,embedder implemented; crops need v2 video (network-blocked)
+offline_reconciliation,NOT-YET-MEASURED,CPU,,,runs at handoff with O3/P4; expected CPU-cheap at tracklet counts

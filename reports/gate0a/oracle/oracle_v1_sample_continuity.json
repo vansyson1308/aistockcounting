@@ -1,0 +1,42 @@
+{
+  "sequence": "v1_sample",
+  "gt": "data/gate0a_prep/v1_sample/gt.txt",
+  "n_frames": 750,
+  "n_gt_boxes": 16500,
+  "tracker_config": {
+    "high_score": 0.5,
+    "low_score": 0.1,
+    "iou_gate": 0.2,
+    "n_init": 3,
+    "max_age": 30,
+    "appearance_weight": 0.0,
+    "ambiguity_margin": 0.15,
+    "ambiguity_terminate": false,
+    "embedding_momentum": 0.9,
+    "size_momentum": 0.8
+  },
+  "stages": {
+    "O1_motion_only": {
+      "idf1": 1.0,
+      "idtp": 16500,
+      "idfp": 0,
+      "idfn": 0,
+      "id_switches": 0,
+      "num_gt_boxes": 16500,
+      "completeness": 1.0,
+      "identity_integrity": 1.0,
+      "hota": 1.0,
+      "deta": 1.0,
+      "assa": 1.0,
+      "loca": 1.0,
+      "gt_tracks": 22,
+      "mean_pred_ids_per_gt_track": 1.0,
+      "max_pred_ids_per_gt_track": 1,
+      "gt_tracks_single_pred_id": 22,
+      "n_tracklets": 22,
+      "ambiguity_events": 0,
+      "tracking_seconds": 0.63,
+      "fps_processed": 1183.8
+    }
+  }
+}

@@ -56,3 +56,6 @@ Thumbs.db
 
 # Local ml venv
 .venv-ml/
+
+# Gate 0A local data (never committed)
+data/

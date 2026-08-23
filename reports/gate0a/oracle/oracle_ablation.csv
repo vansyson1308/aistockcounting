@@ -1,0 +1,3 @@
+experiment,sequence,n_frames,n_gt_boxes,hota,deta,assa,idf1,id_switches,completeness,identity_integrity,n_tracklets,ambiguity_events,mean_pred_ids_per_gt_track,cpu_tracking_fps,notes
+O1_purity_default,v1_sample,750,16500,0.9484,0.9981,0.9012,0.9255,7,0.9981,0.9263,29,37,1.318,923.4,"REAL GT (SoccerTrack v1 sample, 25s, 22 players); O2/O3 require video (blocked here)"
+O1_continuity_mode,v1_sample,750,16500,1.0,1.0,1.0,1.0,0,1.0,1.0,22,0,1.0,1183.8,"REAL GT (SoccerTrack v1 sample, 25s, 22 players); O2/O3 require video (blocked here)"

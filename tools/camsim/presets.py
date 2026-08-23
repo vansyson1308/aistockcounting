@@ -27,6 +27,9 @@ class RigConfig:
     name: str
     description: str
     cameras: list[CameraSpec] = field(default_factory=list)
+    # True when cameras observe from genuinely different viewpoints, so a
+    # player clump is "resolved" if ANY camera sees it un-occluded.
+    multi_viewpoint: bool = False
 
 
 def _mast_y(pitch: PitchSpec) -> float:
@@ -149,7 +152,63 @@ def architecture_d(pitch: PitchSpec, height_m: float = 15.0) -> RigConfig:
         for sign in (-1.0, 1.0)
     ]
     return RigConfig(
-        "D", "distributed multi-camera, 2 sidelines + 2 ends", sideline + ends
+        "D",
+        "distributed multi-camera, 2 sidelines + 2 ends",
+        sideline + ends,
+        multi_viewpoint=True,
+    )
+
+
+def architecture_dn(pitch: PitchSpec, height_m: float = 15.0) -> RigConfig:
+    """D with narrower lenses: B-style 68-degree pairs on BOTH sideline masts
+    plus the two end cameras (6 cameras) — multi-viewpoint occlusion breaking
+    at B/C-class pixel density (Gate 0A instructions section 19 variant)."""
+    quarter = pitch.length_m / 4
+    mast_y = _mast_y(pitch)
+    near_aims = [_sideline_aim(pitch, height_m, s * quarter) for s in (-1.0, 1.0)]
+    cams = [
+        CameraSpec(
+            name=f"Dn-near-{i}",
+            width_px=UHD[0],
+            height_px=UHD[1],
+            hfov_deg=68.0,
+            position=np.array([0.0, mast_y, height_m]),
+            aim_at=aim,
+            k1=-0.05,
+        )
+        for i, aim in enumerate(near_aims)
+    ]
+    cams += [
+        CameraSpec(
+            name=f"Dn-far-{i}",
+            width_px=UHD[0],
+            height_px=UHD[1],
+            hfov_deg=68.0,
+            position=np.array([0.0, -mast_y, height_m]),
+            aim_at=np.array([aim[0], -aim[1], 0.0]),
+            k1=-0.05,
+        )
+        for i, aim in enumerate(near_aims)
+    ]
+    cams += [
+        CameraSpec(
+            name=f"Dn-end-{'left' if sign < 0 else 'right'}",
+            width_px=UHD[0],
+            height_px=UHD[1],
+            hfov_deg=110.0,
+            position=np.array(
+                [sign * (pitch.length_m / 2 + SETBACK_M), 0.0, height_m]
+            ),
+            aim_at=_endline_aim(pitch, height_m, sign),
+            k1=-0.03,
+        )
+        for sign in (-1.0, 1.0)
+    ]
+    return RigConfig(
+        "Dn",
+        "distributed narrow-lens: 2x2 sideline 68deg + 2 ends",
+        cams,
+        multi_viewpoint=True,
     )
 
 
@@ -158,4 +217,5 @@ PRESETS = {
     "B": architecture_b,
     "C": architecture_c,
     "D": architecture_d,
+    "Dn": architecture_dn,
 }

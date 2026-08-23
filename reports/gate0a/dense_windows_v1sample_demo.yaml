@@ -1,0 +1,31 @@
+method: GT-only crowding (mean overlapping pairs per window; no model outputs consulted)
+params:
+  fps: 30.0
+  window_s: 5.0
+  top_k_per_sequence: 3
+  min_separation_s: 6.0
+  iou_thresh: 0.15
+created_at: '2026-08-23T19:54:08+00:00'
+note: "DEMO on SoccerTrack v1 sample (25 s) \u2014 validates the selector mechanics;\
+  \ the frozen v2 manifest is generated from v2 TEST GT at data arrival, before any\
+  \ predictions"
+sequences:
+  v1_sample:
+  - start_frame: 101
+    end_frame: 250
+    start_s: 3.37
+    end_s: 8.33
+    mean_overlap_pairs: 0.673
+    peak_crowd_size: 3
+  - start_frame: 301
+    end_frame: 450
+    start_s: 10.03
+    end_s: 15.0
+    mean_overlap_pairs: 0.947
+    peak_crowd_size: 2
+  - start_frame: 601
+    end_frame: 750
+    start_s: 20.03
+    end_s: 25.0
+    mean_overlap_pairs: 1.4
+    peak_crowd_size: 3
