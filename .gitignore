@@ -53,3 +53,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Local ml venv
+.venv-ml/

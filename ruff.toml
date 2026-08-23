@@ -1,0 +1,16 @@
+# Ruff config for the NEW code surface (ml/, tools/camsim/, scripts/, root).
+# The legacy backend keeps its own nearer config (backend/pyproject.toml);
+# other legacy dirs are excluded until the Phase 0b cleanup governs them.
+line-length = 88
+target-version = "py311"
+
+extend-exclude = [
+    "backend",
+    "frontend",
+    "training",
+    "tools/labeling",
+    ".venv-ml",
+]
+
+[lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "SIM", "RUF"]
