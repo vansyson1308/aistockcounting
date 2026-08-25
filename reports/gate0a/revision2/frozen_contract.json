@@ -1,0 +1,25 @@
+{
+  "report": "Gate 0A Revision 2 \u2014 \u00a74 frozen contract record",
+  "verified_utc": "2026-08-25T02:08:33Z",
+  "branch": "gate0a-revision-2",
+  "head": "1c1fd7a9136a3d5c6729574cc8596f41145a5de4",
+  "files": {
+    "ml/gate0a/thresholds.yaml": {
+      "sha256": "0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf",
+      "status": "UNCHANGED \u2014 byte-identical to the hash frozen before any Revision 1 experiment"
+    },
+    "ml/gate0a/split_manifest.yaml": {
+      "sha256": "92c4390c678a5f582684352eb84844a5e7767488c1ecfedf73c475e7368086da",
+      "status": "UNCHANGED \u2014 official match-disjoint split (TRAIN 7 / VAL 118578 / TEST 128057+132831 halves)"
+    },
+    "ml/gate0a/dense_eval_manifest.yaml": {
+      "sha256": "1ad90765c3aaf0bed809d7ce11f3271859df83dae899fb63cfcebc93574d27a6",
+      "status": "UNCHANGED \u2014 generation command frozen, sequences to be filled GT-only pre-prediction"
+    }
+  },
+  "attestations": [
+    "No threshold value was changed at any point in Revision 2.",
+    "No TEST sequence was touched (none is present in the environment \u2014 download blocked).",
+    "No cherry-picking, no manual fixes, no GT identity used as pipeline input anywhere in Revision 2."
+  ]
+}
