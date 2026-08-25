@@ -53,3 +53,9 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Local ml venv
+.venv-ml/
+
+# Gate 0A local data (never committed)
+data/

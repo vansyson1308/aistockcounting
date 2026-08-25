@@ -1,0 +1,21 @@
+# Gate 0A decision thresholds — machine-readable form of plan §X.4.
+# Consumed by ml.eval.gate.decide(). Changing these numbers is a plan change:
+# update the plan document in the same commit.
+gate0a:
+  # Absolute bars on FINAL (online + offline) results, SoccerTrack-v2 eval
+  # segments. Context: the 2025 fixed-fisheye challenge winner scored 60 HOTA.
+  assa_min: 55.0
+  hota_min: 55.0
+  idf1_min: 65.0
+  # Full-half long-horizon test (share of matched player-time on the majority
+  # canonical identity).
+  identity_integrity_min: 0.90
+  team_cluster_min: 0.95
+  # Optional broadcast-class context check (SoccerNet 30 s clips).
+  soccernet_hota_min: 70.0
+  # CONDITIONAL branch: near-miss margin (points) + DetA-limited profile.
+  conditional_margin: 8.0
+  deta_healthy_min: 60.0
+  # FAIL profile (association-limited, §X.4).
+  assa_fail_below: 50.0
+  identity_integrity_fail_below: 0.80

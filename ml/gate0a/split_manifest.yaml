@@ -1,0 +1,38 @@
+# Gate 0A frozen match-disjoint split — SoccerTrack v2.
+# FROZEN at creation; the TEST split may not influence training or tuning.
+# Adopted VERBATIM from the dataset's OFFICIAL baseline/challenge protocol
+# (SoccerTrack-v2 repo @ 6f5c47cd3a5c38b074c44e9c98dfba48daa230d3,
+# baselines/mot/config.yaml), which is match-disjoint by construction —
+# preferred over constructing our own split per Gate 0A instructions §2.
+dataset:
+  name: soccertrack-v2
+  source: https://huggingface.co/datasets/atomscott/soccertrack-v2
+  license_data: CC BY 4.0 (LICENSE-DATA in the dataset repo, verified 2026-08-23)
+  toolkit_repo_sha: 6f5c47cd3a5c38b074c44e9c98dfba48daa230d3
+  version_note: >
+    Dataset snapshot revision + per-file checksums must be recorded in
+    reports/gate0a/data_integrity.md at download time (network-blocked in the
+    planning environment; see reports/gate0a/executive_report.md).
+  matches_total: 10
+  match_ids: ["117092", "117093", "118575", "118576", "118577", "118578",
+              "128057", "128058", "132831", "132877"]
+
+split:
+  method: official-protocol-adoption (baselines/mot/config.yaml)
+  random_seed: null  # not applicable — official fixed split, no sampling
+  train_matches: ["117092", "117093", "118575", "118576", "118577", "128058", "132877"]
+  val_matches: ["118578"]
+  test_matches: ["128057", "132831"]
+  test_sequences: ["128057_1st", "128057_2nd", "132831_1st", "132831_2nd"]
+  ratio_matches: "7 / 1 / 2"
+
+discipline:
+  train: fitting only
+  val: hyperparameters, tracker thresholds, model selection, early stopping
+  test: >
+    untouched by all development decisions; read mechanically only at final
+    scoring after configurations are frozen. A test-exposed bug is fixed and
+    rerun as a documented new experiment revision, never tuned against.
+
+created_at: "2026-08-23T20:05:00Z"
+created_by: gate0a-execution (session_01FL3jFoi44PbGBDwsARVidS)

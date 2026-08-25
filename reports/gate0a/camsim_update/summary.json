@@ -1,0 +1,632 @@
+[
+  {
+    "rig": "A",
+    "description": "single elevated wide-angle 4K",
+    "n_cameras": 1,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 17.721500125131136,
+      "p10": 18.892816614274423,
+      "median": 27.03279069609369,
+      "max": 56.95819499013982
+    },
+    "vertical_px_per_m": {
+      "min": 9.845277847295076,
+      "p10": 10.496009230152456,
+      "median": 15.018217053385383,
+      "max": 31.643441661188792
+    },
+    "horizontal_px_per_m": {
+      "min": 9.48224967710617,
+      "p10": 10.356302348019943,
+      "median": 14.799879564180621,
+      "max": 42.20751796238369
+    },
+    "elevation_deg": {
+      "min": 6.463309615734896,
+      "p10": 7.509746404043836,
+      "median": 10.302243102130394,
+      "max": 26.560078987804697
+    },
+    "coverage_detect_fraction": 0.8260869565217391,
+    "coverage_reid_fraction": 0.1946951052775499,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.004545454545454545,
+    "occlusion_rate_set_piece": 0.03878787878787879,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 12.0
+  },
+  {
+    "rig": "A",
+    "description": "single elevated wide-angle 4K",
+    "n_cameras": 1,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 17.753878871074665,
+      "p10": 18.971866814370802,
+      "median": 26.616232364175634,
+      "max": 54.18544384136036
+    },
+    "vertical_px_per_m": {
+      "min": 9.863266039485925,
+      "p10": 10.539926007983778,
+      "median": 14.786795757875351,
+      "max": 30.10302435631131
+    },
+    "horizontal_px_per_m": {
+      "min": 9.488936659702553,
+      "p10": 10.347539697449482,
+      "median": 14.65844664347003,
+      "max": 40.096238720666115
+    },
+    "elevation_deg": {
+      "min": 8.059991270704693,
+      "p10": 9.35722220927034,
+      "median": 12.801069382896742,
+      "max": 31.999796380510933
+    },
+    "coverage_detect_fraction": 0.8285479901558654,
+    "coverage_reid_fraction": 0.16844407984686902,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.0033333333333333335,
+    "occlusion_rate_set_piece": 0.03303030303030303,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 15.0
+  },
+  {
+    "rig": "A",
+    "description": "single elevated wide-angle 4K",
+    "n_cameras": 1,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 17.715928321395516,
+      "p10": 18.909119980728953,
+      "median": 25.709890770659133,
+      "max": 50.05085549031006
+    },
+    "vertical_px_per_m": {
+      "min": 9.842182400775286,
+      "p10": 10.505066655960528,
+      "median": 14.283272650366184,
+      "max": 27.806030827950035
+    },
+    "horizontal_px_per_m": {
+      "min": 9.477641099922225,
+      "p10": 10.308900593462273,
+      "median": 14.351563942404225,
+      "max": 36.13744473331863
+    },
+    "elevation_deg": {
+      "min": 10.692236259546792,
+      "p10": 12.391528475725597,
+      "median": 16.854293319379064,
+      "max": 39.799457466486146
+    },
+    "coverage_detect_fraction": 0.8187038556193601,
+    "coverage_reid_fraction": 0.10035548263604047,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.0021212121212121214,
+    "occlusion_rate_set_piece": 0.025757575757575757,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 20.0
+  },
+  {
+    "rig": "B",
+    "description": "two 4K, midline mast, halves + overlap",
+    "n_cameras": 2,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 48.729518527631164,
+      "p10": 57.8807569175155,
+      "median": 79.35151992248369,
+      "max": 1295.1295857415914
+    },
+    "vertical_px_per_m": {
+      "min": 27.071954737572867,
+      "p10": 32.15597606528639,
+      "median": 44.08417773471316,
+      "max": 719.5164365231063
+    },
+    "horizontal_px_per_m": {
+      "min": 4.709993180373213,
+      "p10": 28.263429279502297,
+      "median": 41.246113101431696,
+      "max": 2108.230785022934
+    },
+    "elevation_deg": {
+      "min": 6.463309615734896,
+      "p10": 7.509746404043836,
+      "median": 10.302243102130394,
+      "max": 26.560078987804697
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.18430407437790539,
+    "occlusion_rate_open_play": 0.005118278233088379,
+    "occlusion_rate_set_piece": 0.030446177022601197,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 12.0
+  },
+  {
+    "rig": "B",
+    "description": "two 4K, midline mast, halves + overlap",
+    "n_cameras": 2,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 48.7336828989147,
+      "p10": 57.55986774992413,
+      "median": 77.96171140478637,
+      "max": 1397.663441549481
+    },
+    "vertical_px_per_m": {
+      "min": 27.074268277174834,
+      "p10": 31.977704305513406,
+      "median": 43.31206189154798,
+      "max": 776.4796897497116
+    },
+    "horizontal_px_per_m": {
+      "min": 23.414261802582075,
+      "p10": 28.451402524620214,
+      "median": 41.183557281036045,
+      "max": 1843.0212333530858
+    },
+    "elevation_deg": {
+      "min": 8.059991270704693,
+      "p10": 9.35722220927034,
+      "median": 12.801069382896742,
+      "max": 31.999796380510933
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.16051408258135083,
+    "occlusion_rate_open_play": 0.00327623792839442,
+    "occlusion_rate_set_piece": 0.02135901172462437,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 15.0
+  },
+  {
+    "rig": "B",
+    "description": "two 4K, midline mast, halves + overlap",
+    "n_cameras": 2,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 0.9994531036368608,
+    "player_bbox_height_px": {
+      "min": 48.60169546627232,
+      "p10": 56.799913870266955,
+      "median": 75.03261694428525,
+      "max": 1664.4916772209085
+    },
+    "vertical_px_per_m": {
+      "min": 27.000941925706844,
+      "p10": 31.555507705703864,
+      "median": 41.684787191269585,
+      "max": 924.7175984560603
+    },
+    "horizontal_px_per_m": {
+      "min": 7.701591644760946,
+      "p10": 28.143522100782825,
+      "median": 39.99167143073821,
+      "max": 1866.6072532402368
+    },
+    "elevation_deg": {
+      "min": 10.692236259546792,
+      "p10": 12.390876259029,
+      "median": 16.847002149492095,
+      "max": 39.653592416671025
+    },
+    "coverage_detect_fraction": 0.9994531036368608,
+    "coverage_reid_fraction": 0.9994531036368608,
+    "coverage_ocr_fraction": 0.10609789444900192,
+    "occlusion_rate_open_play": 0.002574109166081391,
+    "occlusion_rate_set_piece": 0.01548003535848018,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 20.0
+  },
+  {
+    "rig": "C",
+    "description": "four 4K, midline mast, quarters",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 81.62271157580919,
+      "p10": 94.30534276196042,
+      "median": 126.99146585122737,
+      "max": 3567.8720251034765
+    },
+    "vertical_px_per_m": {
+      "min": 45.345950875449546,
+      "p10": 52.39185708997801,
+      "median": 70.55081436179299,
+      "max": 1982.151125057487
+    },
+    "horizontal_px_per_m": {
+      "min": 7.926376543461708,
+      "p10": 47.730182137112294,
+      "median": 63.891493427198164,
+      "max": 200.8581944264511
+    },
+    "elevation_deg": {
+      "min": 6.463309615734896,
+      "p10": 7.509746404043836,
+      "median": 10.302243102130394,
+      "max": 26.560078987804697
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.6888159693738036,
+    "occlusion_rate_open_play": 0.003665273358092908,
+    "occlusion_rate_set_piece": 0.028599069604304736,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 12.0
+  },
+  {
+    "rig": "C",
+    "description": "four 4K, midline mast, quarters",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 0.9997265518184304,
+    "player_bbox_height_px": {
+      "min": 82.1236381798178,
+      "p10": 94.21244951937796,
+      "median": 125.37307341337231,
+      "max": 4458.684719132279
+    },
+    "vertical_px_per_m": {
+      "min": 45.62424343323211,
+      "p10": 52.34024973298775,
+      "median": 69.6517074518735,
+      "max": 2477.0470661845993
+    },
+    "horizontal_px_per_m": {
+      "min": 9.364472363461246,
+      "p10": 47.73472115992688,
+      "median": 63.621904527768876,
+      "max": 179.61167309079568
+    },
+    "elevation_deg": {
+      "min": 8.059991270704693,
+      "p10": 9.356889395406967,
+      "median": 12.798230841514933,
+      "max": 31.95520789318674
+    },
+    "coverage_detect_fraction": 0.9997265518184304,
+    "coverage_reid_fraction": 0.9997265518184304,
+    "coverage_ocr_fraction": 0.6784249384741592,
+    "occlusion_rate_open_play": 0.002421495075021946,
+    "occlusion_rate_set_piece": 0.02719519107649611,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 15.0
+  },
+  {
+    "rig": "C",
+    "description": "four 4K, midline mast, quarters",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 0.9680065627563577,
+    "player_bbox_height_px": {
+      "min": 80.27338943566369,
+      "p10": 95.27189780105905,
+      "median": 122.08011102475285,
+      "max": 5040.557909576753
+    },
+    "vertical_px_per_m": {
+      "min": 44.596327464257605,
+      "p10": 52.92883211169948,
+      "median": 67.82228390264046,
+      "max": 2800.309949764863
+    },
+    "horizontal_px_per_m": {
+      "min": 12.10469540050282,
+      "p10": 48.22095127411429,
+      "median": 63.697179875679396,
+      "max": 154.38265946482193
+    },
+    "elevation_deg": {
+      "min": 10.692236259546792,
+      "p10": 12.607014508127218,
+      "median": 17.00963055279804,
+      "max": 37.76991514315669
+    },
+    "coverage_detect_fraction": 0.9680065627563577,
+    "coverage_reid_fraction": 0.9680065627563577,
+    "coverage_ocr_fraction": 0.6428766748701121,
+    "occlusion_rate_open_play": 0.0013210775687516954,
+    "occlusion_rate_set_piece": 0.01673520119877108,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 20.0
+  },
+  {
+    "rig": "D",
+    "description": "distributed multi-camera, 2 sidelines + 2 ends",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 31.859012640243964,
+      "p10": 36.45835132058688,
+      "median": 49.80167648814008,
+      "max": 85.65887238715644
+    },
+    "vertical_px_per_m": {
+      "min": 17.699451466802202,
+      "p10": 20.254639622548265,
+      "median": 27.66759804896671,
+      "max": 47.58826243730913
+    },
+    "horizontal_px_per_m": {
+      "min": 17.636604983144043,
+      "p10": 20.455838265223054,
+      "median": 28.271183188984974,
+      "max": 58.20558546755154
+    },
+    "elevation_deg": {
+      "min": 8.897181058150442,
+      "p10": 10.568717578021792,
+      "median": 15.739260768202575,
+      "max": 26.56505117707799
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 0.8001093792726278,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.0018181818181818182,
+    "occlusion_rate_set_piece": 0.005454545454545455,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 12.0
+  },
+  {
+    "rig": "D",
+    "description": "distributed multi-camera, 2 sidelines + 2 ends",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 31.7265730582727,
+      "p10": 35.66219558537497,
+      "median": 47.51007774086845,
+      "max": 80.83108451974405
+    },
+    "vertical_px_per_m": {
+      "min": 17.62587392126261,
+      "p10": 19.81233088076387,
+      "median": 26.394487633815803,
+      "max": 44.90615806652447
+    },
+    "horizontal_px_per_m": {
+      "min": 17.58972715357786,
+      "p10": 20.081573372341442,
+      "median": 27.54052097499436,
+      "max": 54.39966239511265
+    },
+    "elevation_deg": {
+      "min": 11.05259028751308,
+      "p10": 12.900567717793567,
+      "median": 19.11133278309231,
+      "max": 32.005383208083494
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 0.7590921520371889,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.0018181818181818182,
+    "occlusion_rate_set_piece": 0.004242424242424243,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 15.0
+  },
+  {
+    "rig": "D",
+    "description": "distributed multi-camera, 2 sidelines + 2 ends",
+    "n_cameras": 4,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 31.27915038696715,
+      "p10": 34.154896353520776,
+      "median": 43.31763099278853,
+      "max": 71.78695520230403
+    },
+    "vertical_px_per_m": {
+      "min": 17.377305770537305,
+      "p10": 18.974942418622653,
+      "median": 24.065350551549184,
+      "max": 39.881641779057794
+    },
+    "horizontal_px_per_m": {
+      "min": 17.431267799274874,
+      "p10": 19.53081728165196,
+      "median": 26.192197939028727,
+      "max": 48.11943786299311
+    },
+    "elevation_deg": {
+      "min": 14.476356566029093,
+      "p10": 16.387863471765755,
+      "median": 23.375773592665862,
+      "max": 39.80557109226519
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 0.648345638501504,
+    "coverage_ocr_fraction": 0.0,
+    "occlusion_rate_open_play": 0.0012121212121212121,
+    "occlusion_rate_set_piece": 0.0024242424242424242,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 20.0
+  },
+  {
+    "rig": "Dn",
+    "description": "distributed narrow-lens: 2x2 sideline 68deg + 2 ends",
+    "n_cameras": 6,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 68.74987082064808,
+      "p10": 79.06577215993805,
+      "median": 100.99915472210654,
+      "max": 1295.1295857415914
+    },
+    "vertical_px_per_m": {
+      "min": 38.194372678137825,
+      "p10": 43.92542897774336,
+      "median": 56.11064151228141,
+      "max": 719.5164365231063
+    },
+    "horizontal_px_per_m": {
+      "min": 11.420910942683301,
+      "p10": 36.50699346826553,
+      "median": 51.85674495654607,
+      "max": 2108.230785022934
+    },
+    "elevation_deg": {
+      "min": 9.13812546119752,
+      "p10": 10.735607918375706,
+      "median": 13.495083224381059,
+      "max": 26.56505117707799
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.36860814875581077,
+    "occlusion_rate_open_play": 0.0018181818181818182,
+    "occlusion_rate_set_piece": 0.005454545454545455,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 12.0
+  },
+  {
+    "rig": "Dn",
+    "description": "distributed narrow-lens: 2x2 sideline 68deg + 2 ends",
+    "n_cameras": 6,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 67.22573433132538,
+      "p10": 76.75815042694407,
+      "median": 98.23721065771663,
+      "max": 1397.663441549481
+    },
+    "vertical_px_per_m": {
+      "min": 37.34763018406966,
+      "p10": 42.64341690385782,
+      "median": 54.5762281431759,
+      "max": 776.4796897497116
+    },
+    "horizontal_px_per_m": {
+      "min": 29.45897450137705,
+      "p10": 35.801965697949434,
+      "median": 51.76778132796754,
+      "max": 1843.0212333530858
+    },
+    "elevation_deg": {
+      "min": 11.407908458157115,
+      "p10": 13.145393130930389,
+      "median": 16.475938620793702,
+      "max": 32.005383208083494
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.32102816516270166,
+    "occlusion_rate_open_play": 0.0018181818181818182,
+    "occlusion_rate_set_piece": 0.003110419906687403,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 15.0
+  },
+  {
+    "rig": "Dn",
+    "description": "distributed narrow-lens: 2x2 sideline 68deg + 2 ends",
+    "n_cameras": 6,
+    "grid_step_m": 1.0,
+    "pitch_coverage_fraction": 1.0,
+    "player_bbox_height_px": {
+      "min": 63.529431414326034,
+      "p10": 73.47239011038123,
+      "median": 92.22650888371527,
+      "max": 1664.4916772209085
+    },
+    "vertical_px_per_m": {
+      "min": 35.29412856351446,
+      "p10": 40.817994505767345,
+      "median": 51.23694937984182,
+      "max": 924.7175984560603
+    },
+    "horizontal_px_per_m": {
+      "min": 17.750594039445946,
+      "p10": 33.86891007469526,
+      "median": 49.96860000833608,
+      "max": 1928.969863020734
+    },
+    "elevation_deg": {
+      "min": 12.263193194762293,
+      "p10": 16.9505055477621,
+      "median": 21.24190495974109,
+      "max": 39.653592416671025
+    },
+    "coverage_detect_fraction": 1.0,
+    "coverage_reid_fraction": 1.0,
+    "coverage_ocr_fraction": 0.21219578889800383,
+    "occlusion_rate_open_play": 0.0012121212121212121,
+    "occlusion_rate_set_piece": 0.0,
+    "thresholds_px": {
+      "detect": 20.0,
+      "reid": 40.0,
+      "ocr": 110.0
+    },
+    "mount_height_m": 20.0
+  }
+]

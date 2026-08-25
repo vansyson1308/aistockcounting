@@ -112,3 +112,19 @@ lint:
 test:
 	cd backend && pytest -q
 	cd frontend && npm run test
+
+# --- Football pivot: Phase 0a (ml core, camsim, licensing) ---
+ml-venv:
+	python3 -m venv .venv-ml && .venv-ml/bin/pip install -r ml/requirements-dev.txt
+
+ml-lint:
+	.venv-ml/bin/ruff check ml tools/camsim scripts/license_gate.py conftest.py
+
+ml-test:
+	.venv-ml/bin/python -m pytest ml/tests tools/camsim/tests -q
+
+license-check:
+	python3 scripts/license_gate.py
+
+camsim:
+	.venv-ml/bin/python -m tools.camsim.run --all --heights 8 12 15 20 25 --out outputs/camsim

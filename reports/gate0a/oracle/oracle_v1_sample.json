@@ -1,0 +1,48 @@
+{
+  "sequence": "v1_sample",
+  "gt": "data/gate0a_prep/v1_sample/gt.txt",
+  "n_frames": 750,
+  "n_gt_boxes": 16500,
+  "tracker_config": {
+    "high_score": 0.5,
+    "low_score": 0.1,
+    "iou_gate": 0.2,
+    "n_init": 3,
+    "max_age": 30,
+    "appearance_weight": 0.25,
+    "ambiguity_margin": 0.15,
+    "ambiguity_terminate": true,
+    "embedding_momentum": 0.9,
+    "size_momentum": 0.8
+  },
+  "stages": {
+    "O1_motion_only": {
+      "idf1": 0.9255,
+      "idtp": 15256,
+      "idfp": 1213,
+      "idfn": 1244,
+      "id_switches": 7,
+      "num_gt_boxes": 16500,
+      "completeness": 0.9981,
+      "identity_integrity": 0.9263,
+      "hota": 0.9484,
+      "deta": 0.9981,
+      "assa": 0.9012,
+      "loca": 1.0,
+      "gt_tracks": 22,
+      "mean_pred_ids_per_gt_track": 1.318,
+      "max_pred_ids_per_gt_track": 3,
+      "gt_tracks_single_pred_id": 16,
+      "n_tracklets": 29,
+      "ambiguity_events": 37,
+      "tracking_seconds": 0.81,
+      "fps_processed": 923.4
+    },
+    "O2_skipped": {
+      "reason": "requires real image crops from the sequence video; no video available in this environment (never simulated with synthetic embeddings per instructions section 9)"
+    },
+    "O3_skipped": {
+      "reason": "requires real image crops from the sequence video; no video available in this environment (never simulated with synthetic embeddings per instructions section 9)"
+    }
+  }
+}

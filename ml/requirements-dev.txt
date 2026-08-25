@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest>=8.0,<9
+ruff>=0.6,<1
+# Official HOTA/CLEAR/Identity metrics implementation (MIT). Used by the
+# eval harness when available; custom metrics below do not depend on it.
+trackeval @ git+https://github.com/JonathonLuiten/TrackEval.git

@@ -1,0 +1,61 @@
+{
+  "gt": "data/gate0a_prep/v1_sample/gt.txt",
+  "n_gt_boxes": 16500,
+  "A_perfect_prediction": {
+    "idf1": 1.0,
+    "idtp": 16500,
+    "idfp": 0,
+    "idfn": 0,
+    "id_switches": 0,
+    "num_gt_boxes": 16500,
+    "completeness": 1.0,
+    "identity_integrity": 1.0,
+    "hota": 1.0,
+    "deta": 1.0,
+    "assa": 1.0,
+    "loca": 1.0
+  },
+  "B_permuted_ids": {
+    "idf1": 0.3061,
+    "idtp": 5051,
+    "idfp": 11449,
+    "idfn": 11449,
+    "id_switches": 87,
+    "num_gt_boxes": 16500,
+    "completeness": 1.0,
+    "identity_integrity": 0.3061,
+    "hota": 0.4045,
+    "deta": 0.9995,
+    "assa": 0.1637,
+    "loca": 1.0
+  },
+  "C_dropped_boxes": {
+    "drop_fraction": 0.3,
+    "idf1": 0.8229,
+    "idtp": 11536,
+    "idfp": 0,
+    "idfn": 4964,
+    "id_switches": 0,
+    "num_gt_boxes": 16500,
+    "completeness": 0.6992,
+    "identity_integrity": 1.0,
+    "hota": 0.6993,
+    "deta": 0.6992,
+    "assa": 0.6995,
+    "loca": 1.0
+  },
+  "checks": {
+    "A_perfect_hota_1": true,
+    "A_perfect_deta_1": true,
+    "A_perfect_assa_1": true,
+    "A_perfect_idf1_1": true,
+    "A_perfect_idsw_0": true,
+    "B_detection_stays_high": true,
+    "B_association_degrades": true,
+    "B_switches_appear": true,
+    "C_deta_degrades": true,
+    "C_completeness_tracks_drop": true,
+    "C_surviving_identity_intact": true
+  },
+  "all_passed": true
+}

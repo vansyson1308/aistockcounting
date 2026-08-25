@@ -1,0 +1,30 @@
+# Gate 0A dense-occlusion challenge-set manifest (instructions §4).
+#
+# STATUS: GENERATION FROZEN, WINDOWS PENDING DATA.
+# The selection procedure, parameters, and target sequences below are frozen
+# NOW, before any model prediction exists for SoccerTrack v2. The concrete
+# windows are produced by running the committed deterministic selector against
+# the v2 TEST ground truth as the FIRST step after data arrival — strictly
+# before any predictions are evaluated (enforced by the runbook order in
+# ml/gate0a/README.md). Selection uses GT crowding only; model performance is
+# never consulted. Windows, once generated, are appended here and frozen as a
+# permanent regression benchmark.
+#
+# Mechanics validated on real GT (SoccerTrack v1 sample):
+#   reports/gate0a/dense_windows_v1sample_demo.yaml
+generation:
+  command: >
+    python -m ml.gate0a.runners.select_dense_windows
+    --seq 128057_1st=data/soccertrack-v2/mot/128057_1st/gt/gt.txt
+          128057_2nd=data/soccertrack-v2/mot/128057_2nd/gt/gt.txt
+          132831_1st=data/soccertrack-v2/mot/132831_1st/gt/gt.txt
+          132831_2nd=data/soccertrack-v2/mot/132831_2nd/gt/gt.txt
+    --fps <from seqinfo.ini> --window-s 20 --top-k 5 --min-separation-s 120
+    --iou-thresh 0.15 --out ml/gate0a/dense_eval_manifest.yaml
+    --note "frozen v2 TEST dense windows"
+  method: GT-only crowding (mean overlapping-pair density; largest crowd size)
+  params: {window_s: 20, top_k_per_sequence: 5, min_separation_s: 120,
+           iou_thresh: 0.15}
+  target_sequences: [128057_1st, 128057_2nd, 132831_1st, 132831_2nd]
+  frozen_at: "2026-08-23T20:20:00Z"
+sequences: {}  # populated by the frozen command at data arrival
