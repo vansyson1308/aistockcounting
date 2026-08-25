@@ -1,0 +1,16 @@
+{
+  "gate": "0A",
+  "created_at": "2026-08-25T02:09:43+00:00",
+  "thresholds_sha256": "0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf",
+  "evidence": [
+    "reports/gate0a/revision2/environment_verification.json",
+    "reports/gate0a/revision2/execution_surface_search.md",
+    "reports/gate0a/revision2/frozen_contract.json",
+    "reports/gate0a/revision2/raw_probe_hardware.txt",
+    "reports/gate0a/revision2/raw_probe_network.txt",
+    "reports/gate0a/revision2/raw_probe_stage_a.txt"
+  ],
+  "status": "BLOCKED",
+  "verdict": null,
+  "reason": "GATE 0A REVISION 2 NOT EXECUTABLE FROM THIS SESSION \u2014 the Revision 2 authorization names the owner's LOCAL MACHINE as the execution workstation, but this session verifiably executes in the account's only Claude Code environment (env_01BWXwEeu7xncKhu95swQPwA, kind anthropic_cloud): a 4-core Xeon cloud container with NO NVIDIA silicon at the PCI level (no vendor 0x10de device; nvidia-smi/nvcc//dev/nvidia* absent) and an egress policy whose gateway answers 403 to CONNECT for huggingface.co and cdn-lfs.huggingface.co (proxy status log 2026-08-25T02:06:51Z), the sole host of SoccerTrack v2 \u2014 the live Stage A snapshot_download failed ProxyError 403. Exhaustive surface search (2026-08-25): no self-hosted/GPU environment registered on the account, no reachable local agent/session, the only local bridge session errors computer_unreachable, and cloud purchases are prohibited. This is a NEW blocker: the local-machine authorization has no executable channel from this session. Remedies (any one): register a self-hosted environment on the local GPU machine; run ml/gate0a/README.md steps 7-15 there manually and commit reports/gate0a/**; or allow HF egress plus a GPU environment here. Frozen contract re-verified unchanged (thresholds sha256 0d8bb0d6...)."
+}

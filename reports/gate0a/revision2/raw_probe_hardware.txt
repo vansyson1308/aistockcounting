@@ -1,0 +1,35 @@
+# Gate 0A Revision 2 — raw hardware/GPU probe (fresh, not reused from Revision 1)
+# probe_utc: 2026-08-25T02:06:24Z
+# host: vm | kernel: Linux 6.18.44-fc-v21
+
+$ nvidia-smi
+/bin/bash: line 40: nvidia-smi: command not found
+
+$ which nvidia-smi nvcc
+
+$ ls -la /dev/nvidia* /dev/dri /dev/dxg
+ls: cannot access '/dev/nvidia*': No such file or directory
+ls: cannot access '/dev/dri': No such file or directory
+ls: cannot access '/dev/dxg': No such file or directory
+
+$ ls /proc/driver/nvidia
+ls: cannot access '/proc/driver/nvidia': No such file or directory
+
+$ lspci | grep -i -E "nvidia|vga|3d|display"
+lspci unavailable or no display device
+
+$ ls /sys/bus/pci/devices/ + vendor scan for 0x10de (NVIDIA)
+no PCI device with NVIDIA vendor id 0x10de
+
+$ nproc; head /proc/cpuinfo model name; MemTotal
+4
+model name	: Intel(R) Xeon(R) Processor @ 2.80GHz
+MemTotal:       16461084 kB
+
+$ df -h . (workspace)
+/dev/vda        252G  7.7G   30G  21% /
+
+$ python torch CUDA check (.venv-ml)
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'torch'

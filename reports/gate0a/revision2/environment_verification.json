@@ -1,0 +1,55 @@
+{
+  "report": "Gate 0A Revision 2 \u2014 fresh environment verification (\u00a72)",
+  "generated_utc": "2026-08-25T02:08:33Z",
+  "policy": "All probes re-executed from scratch on 2026-08-25; nothing reused from the Revision 1 record. Raw verbatim outputs in raw_probe_*.txt alongside this file.",
+  "git": {
+    "branch": "gate0a-revision-2",
+    "head": "1c1fd7a9136a3d5c6729574cc8596f41145a5de4",
+    "created_from": "origin/main @ 1c1fd7a9136a3d5c6729574cc8596f41145a5de4 (merge of PR #2)"
+  },
+  "session_placement": {
+    "runs_on_owner_local_machine": false,
+    "evidence": [
+      "get-session context: this session executes in Claude Code Remote environment env_01BWXwEeu7xncKhu95swQPwA ('Van Son'), kind=anthropic_cloud \u2014 a managed ephemeral cloud container, not owner hardware",
+      "hostname 'vm', kernel Linux 6.18.44-fc-v21, 4-core Intel Xeon @ 2.80GHz, 16,461,084 kB RAM, /dev/vda virtual disk (30G free)"
+    ]
+  },
+  "gpu": {
+    "present": false,
+    "probes": {
+      "nvidia_smi": "command not found",
+      "nvcc": "not present",
+      "dev_nodes": "/dev/nvidia*, /dev/dri, /dev/dxg all absent",
+      "proc_driver_nvidia": "absent",
+      "pci_vendor_scan": "no PCI device with NVIDIA vendor id 0x10de anywhere in /sys/bus/pci/devices \u2014 no NVIDIA silicon at the PCI level, not merely missing drivers",
+      "torch": "not installed in .venv-ml (never needed for CPU-valid stages; installing CPU torch cannot create a GPU)"
+    },
+    "raw": "raw_probe_hardware.txt"
+  },
+  "network": {
+    "huggingface_co": "CONNECT tunnel failed, response 403 (curl exit 56)",
+    "cdn_lfs_huggingface_co": "CONNECT tunnel failed, response 403",
+    "git_route": "git ls-remote https://huggingface.co/datasets/atomscott/soccertrack-v2 -> fatal: CONNECT tunnel failed, response 403",
+    "proxy_self_report": "agentproxy /__agentproxy/status logs 'gateway answered 403 to CONNECT (policy denial or upstream failure)' for huggingface.co:443 and cdn-lfs.huggingface.co:443 at 2026-08-25T01:59:48Z and 2026-08-25T02:06:51Z",
+    "controls_proving_proxy_works": {
+      "pypi.org": 200,
+      "github.com": "400 (reachable, answers)",
+      "storage.googleapis.com": "400 (reachable, answers)"
+    },
+    "raw": "raw_probe_network.txt"
+  },
+  "stage_a_attempt": {
+    "command": "huggingface_hub.snapshot_download(repo_id='atomscott/soccertrack-v2', repo_type='dataset', allow_patterns=['README.md'])",
+    "result": "STAGE A FAILED: ProxyError: 403 Forbidden",
+    "executed_utc": "2026-08-25T02:07:22Z",
+    "sole_host_confirmation": "soccertrack-v2 toolkit README/docs/scripts point exclusively to huggingface.co/datasets/atomscott/soccertrack-v2; GitHub repo carries code/docs only (no .gitattributes/LFS, no gt.txt, no match videos; docs/assets demo-*.mp4 are 29M/1.3M/556K rendered visualization clips without GT \u2014 not protocol data)",
+    "raw": "raw_probe_stage_a.txt"
+  },
+  "frozen_contract": {
+    "thresholds_yaml_sha256": "0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf",
+    "matches_revision1_frozen_hash": true,
+    "split_manifest_yaml_sha256": "92c4390c678a5f582684352eb84844a5e7767488c1ecfedf73c475e7368086da",
+    "dense_eval_manifest_yaml_sha256": "1ad90765c3aaf0bed809d7ce11f3271859df83dae899fb63cfcebc93574d27a6",
+    "raw": "raw_frozen_contract_check.txt"
+  }
+}

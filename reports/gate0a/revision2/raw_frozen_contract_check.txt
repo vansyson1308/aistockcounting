@@ -1,0 +1,14 @@
+# §4 frozen contract re-verification on branch gate0a-revision-2
+# utc: 2026-08-25T02:07:40Z | git HEAD: 1c1fd7a9136a3d5c6729574cc8596f41145a5de4 | branch: gate0a-revision-2
+0d8bb0d66871277fe07becc40e7908f302f89e612fddadd6fec988d4bdbc50bf  ml/gate0a/thresholds.yaml
+92c4390c678a5f582684352eb84844a5e7767488c1ecfedf73c475e7368086da  ml/gate0a/split_manifest.yaml
+1ad90765c3aaf0bed809d7ce11f3271859df83dae899fb63cfcebc93574d27a6  ml/gate0a/dense_eval_manifest.yaml
+
+# data files in the GitHub soccertrack-v2 clone? (mp4 / gt.txt / large files)
+/home/user/atomscott/soccertrack-v2/docs/assets/demo-gsr_and_bas.mp4
+/home/user/atomscott/soccertrack-v2/docs/assets/demo-minimap.mp4
+/home/user/atomscott/soccertrack-v2/docs/assets/demo-tracking.mp4
+/home/user/atomscott/soccertrack-v2/.git/objects/pack/pack-0831af9dd8c34643d06cd36711b79db7b20eb8a1.pack
+/home/user/atomscott/soccertrack-v2/docs/assets/demo-gsr_and_bas.mp4
+(empty above = GitHub repo carries code/docs only, no data)
+(no .gitattributes — no LFS pointers in repo)
