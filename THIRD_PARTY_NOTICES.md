@@ -22,12 +22,27 @@ Licenses below were verified against upstream LICENSE files on 2026-08-23
 | TrackEval (JonathonLuiten/TrackEval) | MIT | tracking metrics (HOTA/CLEAR/Identity) |
 | Pillow | MIT-CMU/HPND | image IO (dev/eval tooling) |
 
-Planned (Gate 0A execution on a GPU machine; not vendored here yet):
-D-FINE (Apache-2.0), RT-DETR (Apache-2.0), YOLOX (Apache-2.0),
-torchreid (MIT), PyTorch (BSD-style), torchvision (BSD-3-Clause),
-OpenCV (Apache-2.0), SAHI (MIT), supervision (MIT),
-roboflow/trackers (Apache-2.0). Each must pass the dependency policy
-before being added to any manifest.
+### Gate 0A cloud diagnostic runtime (`ml/gate0a/cloud/requirements-cloud.txt`)
+
+| Component | License | Use |
+|---|---|---|
+| PyTorch | BSD-style | inference runtime (taken from the cloud image; not pinned) |
+| torchvision | BSD-3-Clause | ResNet ImageNet backbone for diagnostic embeddings |
+| transformers (Hugging Face) | Apache-2.0 | D-FINE / RT-DETRv2 inference (`AutoModelForObjectDetection`) |
+| huggingface_hub | Apache-2.0 | gated dataset access, selective `snapshot_download` |
+| opencv-python-headless | Apache-2.0 | video decode, crops |
+
+Pretrained weights used by the cloud diagnostic — **RESEARCH-DIAGNOSTIC
+class only, never shipped**: `ustc-community/dfine-large-coco` and
+`PekingU/rtdetr_v2_r50vd` (Apache-2.0 code; COCO-2017-trained weights with
+ImageNet-pretrained backbones) and torchvision `ResNet50 IMAGENET1K_V2`
+(ImageNet-derived). Product models are retrained on own data per policy
+rule 4.
+
+Planned for later phases (not vendored yet): YOLOX (Apache-2.0),
+torchreid (MIT), SAHI (MIT), supervision (MIT), roboflow/trackers
+(Apache-2.0). Each must pass the dependency policy before being added to
+any manifest.
 
 ## Datasets (not redistributed in this repository)
 
