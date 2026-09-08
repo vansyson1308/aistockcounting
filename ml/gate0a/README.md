@@ -14,6 +14,11 @@ denied by the environment's network egress policy — full evidence in
 `reports/gate0a/executive_report.md`). Everything below runs unchanged on a
 machine with (a) huggingface.co access and (b) a CUDA GPU.
 
+**Cloud execution (2026-09):** `cloud/` runs Stage 0+1+2 of the plan's
+cloud evidence ladder on an ephemeral GPU (Kaggle) against ONE VAL half —
+a DIAGNOSTIC, never the official verdict; see `cloud/README.md`. Steps 7+
+below remain the official TEST protocol.
+
 ## Frozen experimental contract
 
 - Thresholds: `thresholds.yaml` (immutable; §X.4 of the plan).

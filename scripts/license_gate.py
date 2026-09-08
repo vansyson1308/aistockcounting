@@ -43,6 +43,7 @@ MANIFEST_GLOBS = [
     "requirements*.txt",
     "*/requirements*.txt",
     "*/*/requirements*.txt",
+    "*/*/*/requirements*.txt",
     "pyproject.toml",
     "*/pyproject.toml",
     "package.json",
