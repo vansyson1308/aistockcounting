@@ -133,3 +133,20 @@ license-check:
 
 camsim:
 	.venv-ml/bin/python -m tools.camsim.run --all --heights 8 12 15 20 25 --out outputs/camsim
+
+# --- AWS (infra/aws, CDK v2 Python) ---
+infra-venv:
+	python3 -m venv infra/aws/.venv && infra/aws/.venv/bin/pip install -r infra/aws/requirements.txt -r infra/aws/requirements-dev.txt
+	cd infra/aws && npm ci
+
+infra-test:
+	cd infra/aws && .venv/bin/python -m pytest -q
+
+infra-synth:
+	cd infra/aws && env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN ./node_modules/.bin/cdk synth --quiet
+
+aws-deploy:
+	scripts/aws/deploy.sh
+
+aws-teardown:
+	scripts/aws/teardown.sh
