@@ -1,5 +1,5 @@
 setup:
-	python -m venv .venv && . .venv/bin/activate && pip install -r backend/requirements.txt
+	python -m venv .venv && . .venv/bin/activate && pip install -r backend/requirements-dev.txt
 	cd frontend && npm install
 
 dev:
@@ -106,12 +106,20 @@ frontend-typecheck:
 	cd frontend && npm run typecheck
 
 lint:
-	cd backend && ruff check app tests
+	cd backend && ruff check app tests && black --check -q app tests
 	cd frontend && npm run lint
+	python3 scripts/license_gate.py
 
 test:
 	cd backend && pytest -q
 	cd frontend && npm run test
+
+backend-venv:
+	python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt
+
+# Multi-arch backend image (amd64 + arm64/Graviton)
+image-multiarch:
+	docker buildx build --platform linux/amd64,linux/arm64 -t trayagent-backend:dev ./backend
 
 # --- Football pivot: Phase 0a (ml core, camsim, licensing) ---
 ml-venv:

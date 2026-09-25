@@ -60,3 +60,6 @@ Thumbs.db
 
 # Gate 0A local data (never committed)
 data/
+
+# Vendored small models (license: see THIRD_PARTY_NOTICES.md)
+!backend/app/assets/*.onnx

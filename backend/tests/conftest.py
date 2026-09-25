@@ -3,6 +3,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import os
+
+# Tests run against the explicit mock detector unless a test swaps in another
+# one. This is the only place mock mode is switched on; production never
+# falls back to it.
+os.environ.setdefault("DETECTOR_BACKEND", "mock")
+os.environ.setdefault("AGENT_PLANNER", "deterministic")
+
 import io
 from collections.abc import AsyncGenerator
 

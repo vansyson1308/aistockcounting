@@ -1,0 +1,10 @@
+-r requirements.txt
+pytest==8.3.2
+pytest-asyncio==0.23.8
+pytest-cov==5.0.0
+ruff==0.6.2
+black==24.8.0
+mypy==1.11.1
+aiosqlite==0.20.0
+# onnx is only used by tests to build tiny synthetic graphs for the cv2.dnn decode path
+onnx==1.16.2

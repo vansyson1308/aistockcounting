@@ -47,7 +47,12 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        BASE_IMAGE: ${BACKEND_BASE_IMAGE:-public.ecr.aws/docker/library/python:3.11-slim-bookworm}
+    volumes:
+      - ./models:/app/models:ro
     restart: unless-stopped
     depends_on:
       db:
@@ -64,7 +69,13 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-tray-images}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1}
-      MOCK_MODE: ${MOCK_MODE:-true}
+      # onnx needs models/trayagent_v1.onnx (scripts/fetch_model.sh); classical is
+      # the OpenCV baseline for demos before weights exist. Mock is tests-only.
+      DETECTOR_BACKEND: ${DETECTOR_BACKEND:-classical}
+      MODEL_ONNX_PATH: ${MODEL_ONNX_PATH:-/app/models/trayagent_v1.onnx}
+      DNN_ENGINE: ${DNN_ENGINE:-auto}
+      AGENT_ENABLED: ${AGENT_ENABLED:-true}
+      AGENT_PLANNER: ${AGENT_PLANNER:-deterministic}
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.25}
       MAX_IMAGE_SIZE_MB: ${MAX_IMAGE_SIZE_MB:-10}
       DEFAULT_TENANT_KEY: ${DEFAULT_TENANT_KEY:-default}
@@ -76,7 +87,7 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
       interval: 10s
       timeout: 5s
       retries: 10

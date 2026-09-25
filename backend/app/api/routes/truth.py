@@ -37,6 +37,7 @@ from app.schemas.truth import (
     ScanReviewResponse,
 )
 from app.services.inference import InferenceService
+from app.services.privacy import sanitize_upload
 from app.services.storage import StorageService
 from app.utils.image_quality import assess_image_quality
 from app.utils.image_validation import (
@@ -114,7 +115,9 @@ def _discrepancy_payload(row: Discrepancy) -> dict:
 
 
 def _safe_object_key(path: str) -> str:
-    allowed_prefix = "uploads/" if path.startswith("uploads/") else "thumbnails/"
+    allowed_prefix = next(
+        (p for p in ("uploads/", "evidence/") if path.startswith(p)), "thumbnails/"
+    )
     try:
         return _validate_safe_path(path, allowed_prefix)
     except ValueError as exc:
@@ -250,12 +253,19 @@ async def create_scan(
     payload = await image.read()
     validate_file_size(payload)
     validate_decodable_image(payload)
+    settings = get_settings()
+    payload, faces_blurred = await asyncio.to_thread(
+        sanitize_upload,
+        payload,
+        enabled=settings.face_blur_enabled,
+        model_path=settings.face_model_path,
+    )
 
     image_path, image_thumbnail = await asyncio.to_thread(
         storage.save_image_and_thumbnail, payload, image.filename or "audit.jpg"
     )
     detection = await inference.predict(payload)
-    quality = assess_image_quality(payload)
+    quality = await asyncio.to_thread(assess_image_quality, payload)
 
     fallback_expected, fallback_unit_value = await _expected_from_pos_or_tray(
         db, tenant=tenant, branch_code=branch_code, tray_code=tray_code
@@ -302,7 +312,12 @@ async def create_scan(
         action="SCAN_CREATED",
         entity_type="scan_session",
         entity_id=str(scan.id),
-        payload={"quality_flags": quality.flags, "variance_count": variance_count},
+        payload={
+            "quality_flags": quality.flags,
+            "variance_count": variance_count,
+            "faces_blurred": faces_blurred,
+            "detector_backend": detection.get("detector_backend"),
+        },
     )
     await db.commit()
     await db.refresh(scan)
