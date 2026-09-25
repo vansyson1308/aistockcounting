@@ -252,8 +252,18 @@ class ClassicalDetector:
         mask = cv2.morphologyEx(
             mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         )
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         area_img = float(gray.shape[0] * gray.shape[1])
+        # A bright tray rim or table strip along the frame edge would enclose
+        # every item in one external contour. Drop large border-touching
+        # components first.
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        gh, gw = mask.shape
+        for i in range(1, n):
+            x, y, bw, bh, _a = stats[i]
+            touches = x == 0 or y == 0 or x + bw >= gw or y + bh >= gh
+            if touches and bw * bh > self.max_area_frac * area_img:
+                mask[labels == i] = 0
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         dets: list[Det] = []
         for cnt in contours:
             x, y, bw, bh = cv2.boundingRect(cnt)
