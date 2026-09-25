@@ -10,6 +10,9 @@ import os
 # falls back to it.
 os.environ.setdefault("DETECTOR_BACKEND", "mock")
 os.environ.setdefault("AGENT_PLANNER", "deterministic")
+# Legacy truth-layer tests exercise the single-shot path. Agent API tests turn
+# the agent on explicitly (see the ``agent_on`` fixture in test_agent_api.py).
+os.environ.setdefault("AGENT_ENABLED", "false")
 
 import io
 from collections.abc import AsyncGenerator

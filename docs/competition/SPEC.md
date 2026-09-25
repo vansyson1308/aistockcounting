@@ -100,13 +100,17 @@ Step 1: `assess_quality(image)`.
 Step 2 (or 3 after glare): `rectify_tray` then `detect` on the rectified
 image (the original image when no tray quad is found).
 
+Next: if the single shot found **no items**, run `tile_detect`, because the items may
+be too small for one full-frame pass.
+
 Next: if the detections are **dense** (`density > DENSITY_MAX`, or the median
 box area is below `SMALL_BOX_FRAC` of the image), run `tile_detect`. The tiled
 count replaces the single-shot count.
 
 Next: if there are **uncertain regions** (boxes with confidence in
-`[UNCERTAIN_LO, UNCERTAIN_HI)`, or tiles whose single-shot and tiled counts
-disagree), run `zoom_recount` on up to `MAX_ZOOM_REGIONS` of them. Each
+`[UNCERTAIN_LO, UNCERTAIN_HI)`, or tile cells where the tiled pass found
+*fewer* items than the single shot. More items in a tile is the expected gain of
+tiling, not uncertainty), run `zoom_recount` on up to `MAX_ZOOM_REGIONS` of them. Each
 resolved region updates the count.
 
 Reconcile with POS:

@@ -1,6 +1,6 @@
 # TrayAgent — competition status
 
-Last updated: 2026-09-25 (Phase 1 complete)
+Last updated: 2026-09-25 (Phases 1, 3 and 4 complete)
 Branch: `claude/relaxed-wozniak-nhlyvm` (acts as `opencv-comp`; see DECISIONS D-002)
 Deadline: 2026-10-26 23:59 PT · Code freeze target: 2026-10-22
 
@@ -9,8 +9,8 @@ Deadline: 2026-10-26 23:59 PT · Code freeze target: 2026-10-22
 - [x] Phase 0: setup and recon
 - [x] Phase 1: OpenCV 5 migration
 - [ ] Phase 2: data and model (tooling first; training waits on photos)
-- [ ] Phase 3: OpenCV 5 tool library
-- [ ] Phase 4: agent (controller, planner, trace, routes)
+- [x] Phase 3: OpenCV 5 tool library
+- [x] Phase 4: agent (controller, planner, trace, routes)
 - [ ] Phase 5: frontend (timeline, review page)
 - [ ] Phase 6: AWS deployment (CDK, deploy/teardown)
 - [ ] Phase 7: evaluation on the frozen real test set
@@ -66,9 +66,31 @@ Baseline before any change: backend `pytest` 42 passed; frontend `vitest` 18 pas
   columns) verified on Postgres 16.
 - `make lint` green; `make test`: backend 86 passed / 1 skipped, frontend 18 passed.
 
+## Phases 3 and 4: done (2026-09-25)
+
+- `backend/app/agent/tools/`: `assess_quality`, `rectify_tray`, `detect`, `tile_detect`,
+  `zoom_recount`, `reduce_glare`, `compare_previous` (ORB→SIFT, RANSAC homography,
+  `absdiff`) and `render_evidence`. All are pure functions with typed results and evidence images.
+- `backend/app/agent/policy.py`: the SPEC §4.4 policy as a pure `decide()`, plus the
+  `allowed_actions()` guardrails.
+- `backend/app/agent/controller.py`: bounded loop (5 steps / 20 s) with forced
+  `escalate(budget_exhausted)`; every tool call is traced with its evidence key and latency.
+- `backend/app/agent/planner.py`: optional Bedrock Converse tool-use planner. Illegal or
+  failed proposals fall back to deterministic (traced as `planner_fallback`).
+- `backend/app/agent/trace.py`: `agent_steps` rows, plus an `AuditEvent` per decision and a
+  run-completed event.
+- Routes: `POST /scans` (agent behind `AGENT_ENABLED`, `parent_scan_id` for re-shots),
+  `POST /scans/{id}/agent-run`, `GET /scans/{id}/trace` (live plus persisted),
+  `POST /scans/{id}/approve`. New statuses: `needs_recapture`, `awaiting_approval`,
+  `superseded`.
+- Tests cover every policy branch, the budget (steps and time), planner failure and
+  illegal proposals, and the approval gate (review, resolve and re-run all refused; the
+  approver is mandatory).
+
 ## Next
 
-Phase 3 tool library and Phase 4 agent (Phase 2 tooling runs in parallel: waiting on photos).
+Phase 5 frontend, then Phase 6 AWS CDK and local deploy. Phase 2 tooling is built in
+parallel while waiting for photos.
 
 ## Blockers
 

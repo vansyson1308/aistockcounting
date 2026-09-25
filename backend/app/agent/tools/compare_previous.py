@@ -82,7 +82,7 @@ def _match(
 
 
 def compare_previous(
-    current: np.ndarray, previous: np.ndarray, min_region_frac: float = 0.0008
+    current: np.ndarray, previous: np.ndarray, min_region_frac: float = 0.0003
 ) -> CompareResult:
     cur, sc = _resize(current)
     prv, sp = _resize(previous)
@@ -124,18 +124,20 @@ def compare_previous(
 
     otsu, _ = cv2.threshold(diff, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     _, mask = cv2.threshold(diff, max(35.0, otsu), 255, cv2.THRESH_BINARY)
-    mask = cv2.morphologyEx(
-        mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    )
+    # Close first (a missing ring leaves only a thin annulus), then drop specks.
     mask = cv2.morphologyEx(
         mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
     )
+    mask = cv2.morphologyEx(
+        mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    )
     n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+    # Bounding-box area, not pixel count: a missing ring leaves a hollow diff.
     min_area = min_region_frac * hh * ww
     regions_small = [
         tuple(int(v) for v in stats[i, :4])
         for i in range(1, n)
-        if stats[i, cv2.CC_STAT_AREA] >= min_area
+        if stats[i, cv2.CC_STAT_WIDTH] * stats[i, cv2.CC_STAT_HEIGHT] >= min_area
     ]
     changed_ratio = float(np.count_nonzero(mask)) / max(1, int(np.count_nonzero(valid)))
     regions = tuple(
