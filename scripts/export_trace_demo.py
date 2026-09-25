@@ -115,7 +115,6 @@ def from_api(args) -> None:
 def offline(args) -> None:
     sys.path.insert(0, str(REPO / "backend"))
     import cv2
-
     from app.agent.controller import MemoryEvidenceStore, run_agent
     from app.services.detector_cv import build_detector
 

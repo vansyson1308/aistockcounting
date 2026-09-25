@@ -106,7 +106,7 @@ lint:
 	cd backend && ruff check app tests && black --check -q app tests
 	cd frontend && npm run lint
 	python3 scripts/license_gate.py
-	ruff check training demo/video benchmarks scripts/license_gate.py
+	ruff check training demo/video benchmarks scripts/license_gate.py scripts/export_trace_demo.py
 
 test:
 	cd backend && pytest -q
