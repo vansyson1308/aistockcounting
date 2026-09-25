@@ -263,8 +263,9 @@ async def create_scan(
 
     With ``AGENT_ENABLED`` (the default) and ``run_agent`` true, TrayAgent
     produces the count (quality → rectify/detect → tile/zoom → compare →
-    accept, re-shoot or escalate). Otherwise the legacy single-shot path
-    runs. ``parent_scan_id`` links a re-shot to the scan that asked for it.
+    accept, re-shoot or escalate). With ``run_agent`` false the scan is stored
+    as ``pending_review`` for a later ``POST /scans/{id}/agent-run``. Only when
+    the agent is disabled does the legacy single-shot path run. ``parent_scan_id`` links a re-shot to the scan that asked for it.
     """
     validate_file_type(image)
     payload = await image.read()
@@ -362,6 +363,44 @@ async def create_scan(
                 ),
                 "agent": agent_payload(scan, result),
             }
+        )
+
+    if settings.agent_enabled:
+        # Deferred agent run: store the scan now and let POST /scans/{id}/agent-run
+        # (called next by the PWA, which polls the live trace) produce the count.
+        scan = ScanSession(
+            tenant_key=tenant,
+            branch_code=branch_code,
+            tray_code=tray_code,
+            staff_id=staff_id,
+            image_path=image_path,
+            image_thumbnail=image_thumbnail,
+            expected_count=final_expected,
+            parent_scan_id=parent_scan_id,
+            attempt=attempt,
+            status="pending_review",
+            model_version=settings.model_version,
+        )
+        db.add(scan)
+        await db.flush()
+        await _record_event(
+            db,
+            tenant=tenant,
+            actor_id=staff_id,
+            action="SCAN_CREATED",
+            entity_type="scan_session",
+            entity_id=str(scan.id),
+            payload={
+                "faces_blurred": faces_blurred,
+                "agent": "deferred",
+                "attempt": attempt,
+            },
+        )
+        await db.commit()
+        await db.refresh(scan)
+        invalidate()
+        return ScanCreateResponse(
+            data={"scan": _scan_payload(scan), "discrepancy": None}
         )
 
     detection = await inference.predict(payload)

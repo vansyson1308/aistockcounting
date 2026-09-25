@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Multi-arch (linux/amd64, linux/arm64) Next.js standalone image.
 # The default base comes from the ECR Public mirror of the Docker Official Images
 # to avoid Docker Hub pull rate limits.
@@ -5,10 +6,13 @@ ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-alpine
 
 FROM ${BASE_IMAGE} AS deps
 WORKDIR /app
-# Some Next.js SWC binaries on musl need glibc compatibility shims.
-RUN apk add --no-cache libc6-compat
+# No libc6-compat needed: the lockfile pins the musl builds of Next's SWC compiler
+# (@next/swc-linux-{x64,arm64}-musl), so the build needs no apk network access.
 COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Optional build secret "ca": a corporate/proxy CA bundle for npm (never baked in).
+RUN --mount=type=secret,id=ca,required=false \
+    if [ -f /run/secrets/ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/ca; fi; \
+    if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM ${BASE_IMAGE} AS builder
 WORKDIR /app

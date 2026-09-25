@@ -226,14 +226,20 @@ async def test_approve_rejects_non_escalated_scan(client, agent_on) -> None:
     assert r.status_code == 409 and r.json()["error"]["code"] == "NOT_AWAITING_APPROVAL"
 
 
-async def test_agent_cannot_rerun_a_reviewed_scan(client, agent_on) -> None:
+async def test_deferred_scan_then_agent_run_and_no_rerun(client, agent_on) -> None:
     body = await _scan(
         client, make_tray(n_items=12, seed=11), expected=12, run_agent="false"
     )
-    assert body["agent"] is None  # legacy single-shot path
-    assert body["scan"]["status"] == "reviewed"
-    r = await client.post(f"/api/v1/scans/{body['scan']['id']}/agent-run")
-    assert r.status_code == 409
+    assert body["agent"] is None
+    assert (
+        body["scan"]["status"] == "pending_review"
+        and body["scan"]["agent_count"] is None
+    )
+    sid = body["scan"]["id"]
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 200 and r.json()["data"]["scan"]["status"] == "reviewed"
+    again = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert again.status_code == 409  # a reviewed scan is final
 
 
 async def test_agent_run_on_pending_scan(client, agent_on) -> None:
