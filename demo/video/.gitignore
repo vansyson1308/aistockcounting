@@ -1,0 +1,6 @@
+build/
+clips/
+*.mp4
+*.srt
+!raw/.gitkeep
+raw/*

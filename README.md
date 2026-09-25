@@ -1,4 +1,76 @@
-# VietJewelers Inventory Truth Layer
+# TrayAgent: verified jewelry tray counts (OpenCV 5 agent on AWS Graviton)
+
+A phone photo of a jewelry tray becomes a **verified** count. An agent runs OpenCV 5
+tools in a bounded perception → decision → action loop. When the evidence is weak
+(glare, blur, dense clusters, or a mismatch with the POS count), it chooses the next
+step itself:
+- request a specific re-shot;
+- tile and zoom;
+- compare with yesterday's approved photo;
+- escalate to a human with annotated evidence.
+
+No count that changes inventory is committed without a human.
+
+- Spec: `docs/competition/SPEC.md` · Status: `docs/competition/STATUS.md` · Report: `docs/competition/TECHNICAL_REPORT.md` (+ PDF)
+- Diagrams: `docs/competition/architecture.png`, `docs/competition/agent_workflow.png` (Graphviz sources in `docs/competition/diagrams/`)
+- Trace demo: `docs/competition/trace_demo/TRACE_DEMO.md` · Decisions: `docs/competition/DECISIONS.md`
+
+## Pinned runtime stack
+| Component | Version |
+|---|---|
+| Python | 3.11 (`public.ecr.aws/docker/library/python:3.11-slim-bookworm`, multi-arch) |
+| OpenCV | `opencv-python-headless==5.0.0.93` (DNN `ENGINE_AUTO`; YuNet face blur) |
+| numpy | 2.2.6 |
+| FastAPI / SQLAlchemy / Alembic | 0.115.0 / 2.0.32 / 1.13.2 |
+| Detector | YOLOX (Apache-2.0) exported to ONNX, served by `cv2.dnn`; **no Ultralytics** (`scripts/license_gate.py`) |
+| Frontend | Next.js 14.2.35, Node 20 (standalone image) |
+| Database | PostgreSQL 16 |
+| AWS | CDK `aws-cdk-lib==2.270.0` (CLI 2.1143.0): EC2 Graviton, ECR, S3, CloudWatch, CloudFront |
+
+Full lists: `backend/requirements.txt`, `backend/requirements-dev.txt`, `frontend/package-lock.json`,
+`training/requirements-yolox.txt`, `infra/aws/requirements.txt`.
+
+## Build and test
+```bash
+make backend-venv                 # .venv with runtime + dev deps (OpenCV 5)
+cd frontend && npm ci && cd ..
+source .venv/bin/activate
+make lint                         # ruff + black + eslint + license gate
+make test                         # backend pytest + frontend vitest
+make infra-venv && make infra-test infra-synth   # CDK unit tests + synth (no AWS credentials needed)
+make image-multiarch              # backend image for linux/amd64 + linux/arm64
+```
+
+## Run locally (same containers as AWS)
+```bash
+cp .env.example .env
+make up                           # postgres, minio, redis, backend, frontend, nginx
+open http://localhost/scan        # mobile-first PWA; /api/health shows "opencv": "5.0.x"
+```
+Without trained weights, set `DETECTOR_BACKEND=classical` (the default in `.env.example`).
+This is a labelled OpenCV baseline. With `onnx`, a missing model returns 503; nothing is ever silently mocked.
+
+## Data → model → evaluation
+See `training/README.md`: ingest (face blur) → OWLv2 pre-labels → CVAT review
+(`docs/competition/LABELING_HOWTO.md`) → frozen 70/15/15 split → `training/train_yolox.py` →
+`models/trayagent_v1.onnx` (SHA-256 via `scripts/fetch_model.sh`) → `make eval-agent` →
+`reports/agentic/RESULTS.md`.
+
+## Deploy to AWS
+```bash
+AWS_REGION=ap-southeast-1 MODEL_PATH=models/trayagent_v1.onnx scripts/aws/deploy.sh
+scripts/aws/seed_demo.sh https://<cloudfront-domain>      # demo tenant POS figures
+scripts/aws/teardown.sh                                   # removes everything (asks first)
+```
+Details, costs and troubleshooting: `infra/aws/README.md`.
+
+## Demo video
+`docs/competition/VIDEO_RUNBOOK.md` (`RECORD=1 BASE_URL=... demo/video/build.sh`).
+
+---
+
+# Legacy: VietJewelers Inventory Truth Layer (pre-competition README)
+
 
 AI-assisted jewelry inventory audit system for tray photos, POS reconciliation, discrepancy resolution, and retraining feedback. The product direction is no longer just "count items in one image"; it is a visual evidence layer for catching stock variance before it becomes expensive shrink.
 

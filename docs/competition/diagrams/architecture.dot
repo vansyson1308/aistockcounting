@@ -1,0 +1,45 @@
+// TrayAgent architecture. Render: dot -Tpng -Gdpi=160 architecture.dot -o ../architecture.png
+digraph TrayAgent {
+  graph [rankdir=LR, fontname="DejaVu Sans", fontsize=13, bgcolor="white", pad=0.3, nodesep=0.35, ranksep=0.55, splines=true,
+         label="TrayAgent: OpenCV 5 agent on AWS Graviton", labelloc=t, fontsize=20];
+  node  [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=12, color="#475569", fillcolor="#f8fafc"];
+  edge  [fontname="DejaVu Sans", fontsize=10, color="#64748b"];
+
+  phone [label="Staff phone\n(PWA, camera)", fillcolor="#e0e7ff"];
+  manager [label="Manager\n(review & approve)", fillcolor="#e0e7ff"];
+  pos [label="POS (KiotViet)\nsnapshots / CSV", fillcolor="#fef3c7"];
+
+  subgraph cluster_aws {
+    label="AWS (ap-southeast-1)"; fontsize=14; style="rounded,dashed"; color="#f59e0b";
+    cf [label="CloudFront\nHTTPS (*.cloudfront.net)", fillcolor="#fff7ed"];
+    subgraph cluster_ec2 {
+      label="EC2 Graviton  t4g.large / c7g.large (arm64, AL2023, docker compose)"; fontsize=12; style="rounded"; color="#0f172a";
+      nginx [label="nginx"];
+      web [label="Next.js PWA\n(standalone)"];
+      subgraph cluster_api {
+        label="FastAPI backend (arm64 image from ECR)"; style="rounded,filled"; fillcolor="#eef2ff"; color="#6366f1";
+        api [label="Truth layer API\n/scans · /agent-run · /trace · /approve"];
+        ctrl [label="Agent controller\nbounded: 5 steps / 20 s\npolicy + guardrails", fillcolor="#c7d2fe"];
+        tools [label="OpenCV 5 tools\nassess_quality · rectify_tray · detect\ntile_detect · zoom_recount · reduce_glare\ncompare_previous · render_evidence", fillcolor="#dbeafe"];
+        dnn [label="cv2.dnn (ENGINE_AUTO)\nYOLOX ONNX (Apache-2.0)", fillcolor="#dbeafe"];
+        face [label="YuNet face blur\n(cv2.FaceDetectorYN)", fillcolor="#dbeafe"];
+      }
+      pg [label="PostgreSQL 16\nscans · agent_steps · audit_events", shape=cylinder];
+    }
+    s3 [label="S3 evidence bucket\nuploads/ · evidence/\n30-day lifecycle", shape=cylinder, fillcolor="#fff7ed"];
+    ecr [label="ECR\narm64 images", fillcolor="#fff7ed"];
+    cw [label="CloudWatch\nlogs · AgentSteps · Escalated\nAgentLatencyMs · alarms", fillcolor="#fff7ed"];
+    bedrock [label="Bedrock (optional)\nConverse tool-use planner", fillcolor="#fff7ed", style="rounded,filled,dashed"];
+  }
+
+  phone -> cf [label="photo"]; manager -> cf;
+  cf -> nginx; nginx -> web; nginx -> api;
+  api -> face [label="before storage"]; api -> ctrl;
+  ctrl -> tools [label="next action"]; tools -> ctrl [label="numbers + evidence"];
+  tools -> dnn;
+  ctrl -> bedrock [style=dashed, label="propose action\n(fallback: deterministic)"];
+  api -> pg; api -> s3; tools -> s3 [label="evidence images"];
+  api -> cw [label="PutMetricData"]; nginx -> cw [style=dotted, label="awslogs"];
+  ecr -> api [style=dotted, label="pull"];
+  pos -> api [label="expected count"];
+}

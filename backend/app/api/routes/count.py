@@ -3,8 +3,10 @@ import asyncio
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.core.audit import audit_log
+from app.core.config import get_settings
 from app.schemas.count import CountResponse
 from app.services.inference import InferenceService
+from app.services.privacy import sanitize_upload
 from app.services.storage import StorageService
 from app.utils.image_validation import (
     validate_decodable_image,
@@ -44,6 +46,13 @@ async def count_items(
     payload = await image.read()
     validate_file_size(payload)
     validate_decodable_image(payload)
+    settings = get_settings()
+    payload, _ = await asyncio.to_thread(
+        sanitize_upload,
+        payload,
+        enabled=settings.face_blur_enabled,
+        model_path=settings.face_model_path,
+    )
 
     storage_task = asyncio.to_thread(
         storage.save_image_and_thumbnail, payload, image.filename or "upload.jpg"

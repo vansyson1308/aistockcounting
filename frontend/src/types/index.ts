@@ -56,7 +56,108 @@ export type ScanSession = {
   status: string;
   model_version?: string | null;
   processing_time_ms?: number | null;
+  parent_scan_id?: string | null;
+  attempt?: number | null;
+  agent_run_id?: string | null;
+  agent_decision?: AgentDecision | null;
+  agent_count?: number | null;
+  agent_reason?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   created_at: string;
+};
+
+export type ScanStatus =
+  | 'pending_review'
+  | 'reviewed'
+  | 'discrepancy_open'
+  | 'needs_recapture'
+  | 'awaiting_approval'
+  | 'superseded'
+  | 'agent_running'
+  | 'ignored';
+
+export type AgentDecision = 'auto_accept' | 'request_recapture' | 'escalate';
+
+export type AgentTool =
+  | 'assess_quality'
+  | 'reduce_glare'
+  | 'rectify_tray'
+  | 'detect'
+  | 'tile_detect'
+  | 'zoom_recount'
+  | 'compare_previous'
+  | 'render_evidence'
+  | 'planner';
+
+export type PlannerName = 'deterministic' | 'bedrock';
+
+/** One tool call (or planner event) recorded by the agent. `outputs` depends on `tool`. */
+export type TraceStep = {
+  seq: number;
+  step_no: number;
+  tool: AgentTool | string;
+  inputs: Record<string, unknown>;
+  outputs: Record<string, unknown>;
+  evidence_key: string | null;
+  /** Origin-relative URL, e.g. `/api/v1/images/object/evidence/...jpg`. */
+  evidence_url: string | null;
+  decision: string;
+  reason: string;
+  latency_ms: number;
+  planner: PlannerName | string;
+};
+
+export type TraceRun = {
+  run_id: string;
+  steps: TraceStep[];
+};
+
+export type LiveTrace = {
+  run_id: string;
+  running: boolean;
+  steps: TraceStep[];
+  t: number;
+};
+
+export type TraceData = {
+  scan: ScanSession;
+  latest_run_id: string | null;
+  steps: TraceStep[];
+  runs: TraceRun[];
+  live: LiveTrace | null;
+};
+
+/** [x, y, w, h] in the rectified tray image. */
+export type Rect = [number, number, number, number];
+
+export type AgentRun = {
+  run_id: string;
+  decision: AgentDecision;
+  code: string;
+  reason: string;
+  instruction: string | null;
+  count: number | null;
+  single_shot_count: number | null;
+  steps_used: number;
+  elapsed_ms: number;
+  planner: PlannerName | string;
+  planner_fallbacks: number;
+  evidence_key: string | null;
+  uncertain_regions: Rect[];
+  changed_regions: Rect[];
+  status: ScanStatus | string;
+  trace: TraceStep[];
+};
+
+export type ApproveDecision = 'approve' | 'correct' | 'reject';
+
+export type ApprovePayload = {
+  approver_id: string;
+  decision: ApproveDecision;
+  corrected_count?: number;
+  note?: string;
+  unit_value?: number;
 };
 
 export type Discrepancy = {
@@ -80,6 +181,12 @@ export type Discrepancy = {
 export type ScanCreateData = {
   scan: ScanSession;
   discrepancy?: Discrepancy | null;
+  agent?: AgentRun | null;
+};
+
+export type ApproveResult = {
+  scan: ScanSession;
+  discrepancy: Discrepancy | null;
 };
 
 export type ReviewScanPayload = {

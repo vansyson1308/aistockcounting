@@ -1,4 +1,6 @@
 import {
+  ApprovePayload,
+  ApproveResult,
   CountResult,
   DiscrepancyListData,
   HistoryItem,
@@ -8,9 +10,14 @@ import {
   SavePayload,
   ScanCreateData,
   StatsData,
+  TraceData,
 } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1';
+/**
+ * Base URL of the backend API. Production serves the frontend and the API on one origin
+ * (nginx / CloudFront), so the default is origin-relative.
+ */
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/v1';
 
 export class ApiClientError extends Error {
   code: string;
@@ -20,15 +27,40 @@ export class ApiClientError extends Error {
   }
 }
 
+/** FastAPI's default validation errors use `{detail: string | [{msg}]}` instead of the envelope. */
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const first = detail[0] as { msg?: unknown } | null;
+    if (first && typeof first.msg === 'string') return first.msg;
+  }
+  return null;
+}
+
 async function parseResponse<T>(res: Response): Promise<T> {
-  const payload = await res.json();
+  let payload;
+  try {
+    payload = await res.json();
+  } catch {
+    throw new ApiClientError(
+      `HTTP_${res.status ?? 0}`,
+      `Unexpected response from the server (HTTP ${res.status ?? 'error'}).`
+    );
+  }
   if (!res.ok || payload.success === false) {
-    throw new ApiClientError(payload?.error?.code || 'API_ERROR', payload?.error?.message || 'Lỗi hệ thống');
+    throw new ApiClientError(
+      payload?.error?.code || (res.status === 422 ? 'VALIDATION_ERROR' : 'API_ERROR'),
+      payload?.error?.message || detailMessage(payload?.detail) || 'Unexpected server error.'
+    );
   }
   return payload.data as T;
 }
 
-export async function countItems(file: File, trayId?: string, staffId?: string): Promise<CountResult> {
+export async function countItems(
+  file: File,
+  trayId?: string,
+  staffId?: string
+): Promise<CountResult> {
   const formData = new FormData();
   formData.append('image', file);
   if (trayId) formData.append('tray_id', trayId);
@@ -38,7 +70,9 @@ export async function countItems(file: File, trayId?: string, staffId?: string):
   return parseResponse<CountResult>(res);
 }
 
-export async function saveRecord(payload: SavePayload): Promise<{ id: string; created_at: string }> {
+export async function saveRecord(
+  payload: SavePayload
+): Promise<{ id: string; created_at: string }> {
   const res = await fetch(`${API_BASE}/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -55,7 +89,11 @@ export async function createAuditScan(
     staffId?: string;
     expectedCount?: number | null;
     unitValue?: number | null;
-  },
+    /** Id of the scan whose agent asked for this re-shot. */
+    parentScanId?: string | null;
+    /** Run TrayAgent inside the upload request (server default: true). */
+    runAgent?: boolean;
+  }
 ): Promise<ScanCreateData> {
   const formData = new FormData();
   formData.append('image', file);
@@ -68,12 +106,17 @@ export async function createAuditScan(
   if (payload.unitValue !== null && payload.unitValue !== undefined) {
     formData.append('unit_value', String(payload.unitValue));
   }
+  if (payload.parentScanId) formData.append('parent_scan_id', payload.parentScanId);
+  if (payload.runAgent !== undefined) formData.append('run_agent', String(payload.runAgent));
 
   const res = await fetch(`${API_BASE}/scans`, { method: 'POST', body: formData });
   return parseResponse<ScanCreateData>(res);
 }
 
-export async function reviewAuditScan(id: string, payload: ReviewScanPayload): Promise<ScanCreateData> {
+export async function reviewAuditScan(
+  id: string,
+  payload: ReviewScanPayload
+): Promise<ScanCreateData> {
   const res = await fetch(`${API_BASE}/scans/${id}/review`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -82,15 +125,43 @@ export async function reviewAuditScan(id: string, payload: ReviewScanPayload): P
   return parseResponse<ScanCreateData>(res);
 }
 
+/** Runs TrayAgent synchronously on a stored scan (can take up to ~20 s). */
+export async function runAgent(id: string): Promise<ScanCreateData> {
+  const res = await fetch(`${API_BASE}/scans/${encodeURIComponent(id)}/agent-run`, {
+    method: 'POST',
+  });
+  return parseResponse<ScanCreateData>(res);
+}
+
+/** Persisted agent trace plus the in-process live progress of a running agent. */
+export async function getTrace(id: string): Promise<TraceData> {
+  const res = await fetch(`${API_BASE}/scans/${encodeURIComponent(id)}/trace`, {
+    cache: 'no-store',
+  });
+  return parseResponse<TraceData>(res);
+}
+
+/** Human approval gate for scans the agent escalated (`awaiting_approval`). */
+export async function approveScan(id: string, payload: ApprovePayload): Promise<ApproveResult> {
+  const res = await fetch(`${API_BASE}/scans/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<ApproveResult>(res);
+}
+
 export async function getDiscrepancies(params?: URLSearchParams): Promise<DiscrepancyListData> {
   const query = params?.toString();
-  const res = await fetch(`${API_BASE}/discrepancies${query ? `?${query}` : ''}`, { cache: 'no-store' });
+  const res = await fetch(`${API_BASE}/discrepancies${query ? `?${query}` : ''}`, {
+    cache: 'no-store',
+  });
   return parseResponse<DiscrepancyListData>(res);
 }
 
 export async function resolveDiscrepancy(
   id: string,
-  payload: { status: 'resolved' | 'ignored'; resolution_note: string; resolved_by?: string | null },
+  payload: { status: 'resolved' | 'ignored'; resolution_note: string; resolved_by?: string | null }
 ) {
   const res = await fetch(`${API_BASE}/discrepancies/${id}/resolve`, {
     method: 'POST',
@@ -129,4 +200,29 @@ export function buildImageUrl(path?: string | null): string {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${API_BASE}/images/object/${path}`;
+}
+
+/**
+ * Resolves an origin-relative evidence URL (it already contains the API prefix, e.g.
+ * `/api/v1/images/object/evidence/x.jpg`) against the origin of `apiBase`. A relative
+ * `apiBase` means the API shares the site origin, so the URL is used as is.
+ */
+export function resolveEvidenceSrc(url: string | null | undefined, apiBase: string): string {
+  if (!url) return '';
+  if (/^(https?:)?\/\//i.test(url) || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  const path = url.startsWith('/') ? url : `/${url}`;
+  if (/^https?:\/\//i.test(apiBase)) {
+    try {
+      return `${new URL(apiBase).origin}${path}`;
+    } catch {
+      return path;
+    }
+  }
+  return path;
+}
+
+export function evidenceSrc(url: string | null | undefined): string {
+  return resolveEvidenceSrc(url, API_BASE);
 }

@@ -37,6 +37,7 @@ from app.schemas.truth import (
     ScanReviewResponse,
 )
 from app.services.inference import InferenceService
+from app.services.privacy import sanitize_upload
 from app.services.storage import StorageService
 from app.utils.image_quality import assess_image_quality
 from app.utils.image_validation import (
@@ -89,6 +90,14 @@ def _scan_payload(row: ScanSession) -> dict:
         "status": row.status,
         "model_version": row.model_version,
         "processing_time_ms": row.processing_time_ms,
+        "parent_scan_id": row.parent_scan_id,
+        "attempt": row.attempt or 0,
+        "agent_run_id": row.agent_run_id,
+        "agent_decision": row.agent_decision,
+        "agent_count": row.agent_count,
+        "agent_reason": row.agent_reason,
+        "approved_by": row.approved_by,
+        "approved_at": row.approved_at,
         "created_at": row.created_at,
     }
 
@@ -114,7 +123,9 @@ def _discrepancy_payload(row: Discrepancy) -> dict:
 
 
 def _safe_object_key(path: str) -> str:
-    allowed_prefix = "uploads/" if path.startswith("uploads/") else "thumbnails/"
+    allowed_prefix = next(
+        (p for p in ("uploads/", "evidence/") if path.startswith(p)), "thumbnails/"
+    )
     try:
         return _validate_safe_path(path, allowed_prefix)
     except ValueError as exc:
@@ -241,27 +252,159 @@ async def create_scan(
     staff_id: str | None = Form(default=None),
     expected_count: int | None = Form(default=None),
     unit_value: float | None = Form(default=None),
+    parent_scan_id: UUID | None = Form(default=None),
+    run_agent: bool = Form(default=True),
     tenant: str = Depends(tenant_key),
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(StorageService),
     inference: InferenceService = Depends(InferenceService),
 ) -> ScanCreateResponse:
+    """Create an audit scan.
+
+    With ``AGENT_ENABLED`` (the default) and ``run_agent`` true, TrayAgent
+    produces the count (quality → rectify/detect → tile/zoom → compare →
+    accept, re-shoot or escalate). With ``run_agent`` false the scan is stored
+    as ``pending_review`` for a later ``POST /scans/{id}/agent-run``. Only when
+    the agent is disabled does the legacy single-shot path run. ``parent_scan_id`` links a re-shot to the scan that asked for it.
+    """
     validate_file_type(image)
     payload = await image.read()
     validate_file_size(payload)
     validate_decodable_image(payload)
+    settings = get_settings()
+    payload, faces_blurred = await asyncio.to_thread(
+        sanitize_upload,
+        payload,
+        enabled=settings.face_blur_enabled,
+        model_path=settings.face_model_path,
+    )
 
     image_path, image_thumbnail = await asyncio.to_thread(
         storage.save_image_and_thumbnail, payload, image.filename or "audit.jpg"
     )
-    detection = await inference.predict(payload)
-    quality = assess_image_quality(payload)
 
     fallback_expected, fallback_unit_value = await _expected_from_pos_or_tray(
         db, tenant=tenant, branch_code=branch_code, tray_code=tray_code
     )
     final_expected = expected_count if expected_count is not None else fallback_expected
     final_unit_value = unit_value if unit_value is not None else fallback_unit_value
+
+    attempt = 0
+    if parent_scan_id is not None:
+        parent = (
+            await db.execute(
+                select(ScanSession).where(
+                    ScanSession.id == parent_scan_id, ScanSession.tenant_key == tenant
+                )
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise api_error(404, "PARENT_SCAN_NOT_FOUND", "Parent scan not found")
+        attempt = (parent.attempt or 0) + 1
+        if parent.status == "needs_recapture":
+            parent.status = "superseded"
+
+    if settings.agent_enabled and run_agent:
+        from app.agent.service import agent_payload, run_for_scan
+
+        scan = ScanSession(
+            tenant_key=tenant,
+            branch_code=branch_code,
+            tray_code=tray_code,
+            staff_id=staff_id,
+            image_path=image_path,
+            image_thumbnail=image_thumbnail,
+            expected_count=final_expected,
+            parent_scan_id=parent_scan_id,
+            attempt=attempt,
+            status="agent_running",
+            model_version=settings.model_version,
+        )
+        db.add(scan)
+        await db.flush()
+        await db.refresh(scan)
+        result = await run_for_scan(
+            db,
+            scan,
+            detector=inference.detector(),
+            storage=storage,
+            image_bytes=payload,
+            unit_value=final_unit_value,
+        )
+        await _record_event(
+            db,
+            tenant=tenant,
+            actor_id=staff_id,
+            action="SCAN_CREATED",
+            entity_type="scan_session",
+            entity_id=str(scan.id),
+            payload={
+                "faces_blurred": faces_blurred,
+                "agent_decision": result.action.value,
+                "attempt": attempt,
+            },
+        )
+        await db.commit()
+        await db.refresh(scan)
+        discrepancy = (
+            await db.execute(
+                select(Discrepancy)
+                .where(Discrepancy.scan_id == scan.id, Discrepancy.status == "open")
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        audit_log("SCAN_CREATED", staff_id, {"scan_id": str(scan.id)})
+        invalidate()
+        return ScanCreateResponse(
+            data={
+                "scan": _scan_payload(scan),
+                "discrepancy": (
+                    _discrepancy_payload(discrepancy) if discrepancy else None
+                ),
+                "agent": agent_payload(scan, result),
+            }
+        )
+
+    if settings.agent_enabled:
+        # Deferred agent run: store the scan now and let POST /scans/{id}/agent-run
+        # (called next by the PWA, which polls the live trace) produce the count.
+        scan = ScanSession(
+            tenant_key=tenant,
+            branch_code=branch_code,
+            tray_code=tray_code,
+            staff_id=staff_id,
+            image_path=image_path,
+            image_thumbnail=image_thumbnail,
+            expected_count=final_expected,
+            parent_scan_id=parent_scan_id,
+            attempt=attempt,
+            status="pending_review",
+            model_version=settings.model_version,
+        )
+        db.add(scan)
+        await db.flush()
+        await _record_event(
+            db,
+            tenant=tenant,
+            actor_id=staff_id,
+            action="SCAN_CREATED",
+            entity_type="scan_session",
+            entity_id=str(scan.id),
+            payload={
+                "faces_blurred": faces_blurred,
+                "agent": "deferred",
+                "attempt": attempt,
+            },
+        )
+        await db.commit()
+        await db.refresh(scan)
+        invalidate()
+        return ScanCreateResponse(
+            data={"scan": _scan_payload(scan), "discrepancy": None}
+        )
+
+    detection = await inference.predict(payload)
+    quality = await asyncio.to_thread(assess_image_quality, payload)
     detected_count = int(detection["detected_count"])
     variance_count = (
         detected_count - final_expected if final_expected is not None else None
@@ -289,6 +432,8 @@ async def create_scan(
         quality_score=quality.score,
         quality_flags=quality.flags,
         status="pending_review",
+        parent_scan_id=parent_scan_id,
+        attempt=attempt,
         model_version=detection.get("model_version"),
         processing_time_ms=detection.get("processing_time_ms"),
     )
@@ -302,7 +447,12 @@ async def create_scan(
         action="SCAN_CREATED",
         entity_type="scan_session",
         entity_id=str(scan.id),
-        payload={"quality_flags": quality.flags, "variance_count": variance_count},
+        payload={
+            "quality_flags": quality.flags,
+            "variance_count": variance_count,
+            "faces_blurred": faces_blurred,
+            "detector_backend": detection.get("detector_backend"),
+        },
     )
     await db.commit()
     await db.refresh(scan)
@@ -338,6 +488,12 @@ async def review_scan(
     ).scalar_one_or_none()
     if scan is None:
         raise api_error(404, "SCAN_NOT_FOUND", "Scan not found")
+    if scan.status == "awaiting_approval":
+        raise api_error(
+            409,
+            "APPROVAL_REQUIRED",
+            "This scan was escalated by the agent; use POST /scans/{id}/approve.",
+        )
 
     if payload.manual_count is not None:
         scan.manual_count = payload.manual_count
@@ -434,6 +590,18 @@ async def resolve_discrepancy(
     ).scalar_one_or_none()
     if discrepancy is None:
         raise api_error(404, "DISCREPANCY_NOT_FOUND", "Discrepancy not found")
+
+    gated_scan = (
+        await db.execute(
+            select(ScanSession).where(ScanSession.id == discrepancy.scan_id)
+        )
+    ).scalar_one_or_none()
+    if gated_scan is not None and gated_scan.status == "awaiting_approval":
+        raise api_error(
+            409,
+            "APPROVAL_REQUIRED",
+            "The scan behind this discrepancy awaits human approval of its count first.",
+        )
 
     discrepancy.status = payload.status
     discrepancy.resolution_note = payload.resolution_note

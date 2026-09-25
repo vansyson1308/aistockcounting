@@ -34,10 +34,13 @@ BANNED: dict[str, str] = {
 
 # (manifest path, banned name) pairs tolerated as legacy exceptions.
 # This list only shrinks; it is deleted entirely at Phase 0b.
-GRANDFATHERED: set[tuple[str, str]] = {
-    ("backend/requirements.txt", "ultralytics"),
-    ("training/requirements-train.txt", "ultralytics"),
-}
+# Empty since 2026-09-25: the OpenCV 5 migration removed ultralytics from the
+# backend, and the YOLOX (Apache-2.0) training path replaced the legacy
+# training/requirements-train.txt.
+GRANDFATHERED: set[tuple[str, str]] = set()
+
+# Manifests that ship in the runtime image. They may never be grandfathered.
+RUNTIME_MANIFESTS = ("backend/requirements.txt", "backend/pyproject.toml")
 
 MANIFEST_GLOBS = [
     "requirements*.txt",
@@ -134,6 +137,11 @@ def main() -> int:
     for rel, name in sorted(GRANDFATHERED):
         if (repo_root / rel).is_file():
             grandfathered_hits.append((rel, name))
+
+    runtime_exceptions = [(r, n) for r, n in GRANDFATHERED if r in RUNTIME_MANIFESTS]
+    if runtime_exceptions:
+        print(f"license gate: FAIL — runtime manifests grandfathered: {runtime_exceptions}")
+        return 1
 
     print(f"license gate: scanned {len(manifests)} manifest(s)")
     for rel, name in grandfathered_hits:

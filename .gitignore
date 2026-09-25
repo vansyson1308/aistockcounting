@@ -25,7 +25,11 @@ frontend/.next/
 frontend/tsconfig.tsbuildinfo
 
 # Model weights & training outputs (large binary files)
-/models/
+/models/*
+!/models/README.md
+!/models/*.sha256
+!/models/*.json
+!/models/*.source
 outputs/
 runs/
 *.pt
@@ -54,8 +58,13 @@ Thumbs.db
 # Claude
 .claude/
 
-# Local ml venv
+# Local venvs
+.venv/
 .venv-ml/
 
 # Gate 0A local data (never committed)
 data/
+
+# Vendored small models (license: see THIRD_PARTY_NOTICES.md)
+!backend/app/assets/*.onnx
+docs/competition/trayagent_source.zip

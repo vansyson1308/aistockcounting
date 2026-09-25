@@ -1,0 +1,37 @@
+// TrayAgent decision policy (SPEC 4.4). Render: dot -Tpng -Gdpi=160 agent_workflow.dot -o ../agent_workflow.png
+digraph Policy {
+  graph [rankdir=TB, fontname="DejaVu Sans", bgcolor="white", pad=0.3, nodesep=0.4, ranksep=0.45,
+         label="TrayAgent: perception → decision → action (≤ 5 steps, ≤ 20 s)", labelloc=t, fontsize=18];
+  node [fontname="DejaVu Sans", fontsize=11, style="rounded,filled", shape=box, color="#475569", fillcolor="#dbeafe"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#64748b"];
+
+  start [label="photo + POS count\n(+ yesterday's approved photo)", shape=note, fillcolor="#f1f5f9"];
+  assess [label="1  assess_quality\nLaplacian var · HSV glare · p99 · tray coverage"];
+  q [label="quality?", shape=diamond, fillcolor="#fef9c3"];
+  glare [label="reduce_glare\ninpaint (TELEA) + CLAHE"];
+  count [label="rectify_tray + detect\nhomography · cv2.dnn YOLOX · NMSBoxes"];
+  dense [label="dense or empty?", shape=diamond, fillcolor="#fef9c3"];
+  tile [label="tile_detect\noverlapping tiles + global NMS"];
+  unc [label="uncertain regions?", shape=diamond, fillcolor="#fef9c3"];
+  zoom [label="zoom_recount\ncrop · upscale · re-detect"];
+  pos [label="count = POS ?", shape=diamond, fillcolor="#fef9c3"];
+  cmp [label="compare_previous\nORB/SIFT · RANSAC homography · absdiff"];
+  conf [label="confident &\nnot degraded?", shape=diamond, fillcolor="#fef9c3"];
+
+  recap [label="REQUEST RE-SHOT\nspecific instruction\nstatus needs_recapture", fillcolor="#ede9fe"];
+  accept [label="AUTO-ACCEPT\ninventory unchanged", fillcolor="#dcfce7"];
+  esc [label="ESCALATE + render_evidence\nstatus awaiting_approval\n→ human approve / correct / reject", fillcolor="#fee2e2"];
+  budget [label="budget exhausted\n(steps or time)", shape=plaintext, fillcolor="white", fontcolor="#b91c1c"];
+
+  start -> assess -> q;
+  q -> recap [label="blur · tray not in frame\nsevere glare / dark (1st attempt)"];
+  q -> glare [label="mild glare"]; glare -> count;
+  q -> count [label="ok"];
+  count -> dense; dense -> tile [label="yes"]; dense -> unc [label="no"]; tile -> unc;
+  unc -> zoom [label="yes"]; unc -> pos [label="no"]; zoom -> pos;
+  pos -> conf [label="yes / no POS"];
+  pos -> cmp [label="no, has previous"]; pos -> esc [label="no, no previous"];
+  cmp -> esc [label="changed regions\nlocalised"];
+  conf -> accept [label="yes"]; conf -> esc [label="no"];
+  budget -> esc [style=dashed, color="#b91c1c"];
+}
