@@ -1,104 +1,83 @@
-# TrayAgent — competition status
+# TrayAgent: competition status
 
-Last updated: 2026-09-25 (Phases 1, 3 and 4 complete)
-Branch: `claude/relaxed-wozniak-nhlyvm` (acts as `opencv-comp`; see DECISIONS D-002)
-Deadline: 2026-10-26 23:59 PT · Code freeze target: 2026-10-22
+Last updated: 2026-09-25 (end of the first build session)
+Branch: `claude/relaxed-wozniak-nhlyvm` (acts as `opencv-comp`; see DECISIONS D-002).
+Draft PR: vansyson1308/aistockcounting#5.
+Deadline: 2026-10-26 23:59 PT · Code freeze target: 2026-10-22.
+
+> **The submission is NOT ready yet.** The software, infrastructure-as-code, evaluation
+> harness, report and video pipeline are built and tested. The results, the deployment
+> and the final video depend on the owner's inputs: real photos (B-001) and AWS
+> credentials (B-002).
 
 ## Checklist
 
 - [x] Phase 0: setup and recon
 - [x] Phase 1: OpenCV 5 migration
-- [ ] Phase 2: data and model (tooling first; training waits on photos)
+- [~] Phase 2: data and model. **Tooling done and verified**; labelling and training wait on photos (B-001)
 - [x] Phase 3: OpenCV 5 tool library
-- [x] Phase 4: agent (controller, planner, trace, routes)
-- [ ] Phase 5: frontend (timeline, review page)
-- [ ] Phase 6: AWS deployment (CDK, deploy/teardown)
-- [ ] Phase 7: evaluation on the frozen real test set
-- [ ] Phase 8: COOL (stretch)
-- [ ] Phase 9: submission materials
-- [ ] Phase 10: demo video pipeline
+- [x] Phase 4: agent (controller, planner, trace, routes, approval gate)
+- [x] Phase 5: frontend (live timeline, re-shot flow, review page). Checked in an iPhone 13 viewport against the local stack
+- [~] Phase 6: AWS. **CDK, scripts and tests done** (synth OK without credentials); deployment waits on credentials (B-002)
+- [~] Phase 7: evaluation. **Harness done** (frozen-set guard, failure gallery); results wait on photos (B-001)
+- [ ] Phase 8: COOL. Harness and protocol ready; waiting on the owner's approval of the paid Marketplace subscription (B-005)
+- [~] Phase 9: submission materials. Report MD+PDF, diagrams, trace demo (synthetic-labelled), README, Devpost fields and `make source-archive` are done; they need real numbers and the endpoint URL
+- [~] Phase 10: video pipeline. Done and rendered once (a synthetic rehearsal, 165.2 s, 1920×1080, checked with ffprobe); the real render needs photos, the endpoint and the team intro
 
-## Phase 0 recon: facts confirmed (2026-09-25)
+## SPEC §3 MVP
 
-| Claim in the brief | Verified | Evidence |
+| Item | State | Evidence |
 |---|---|---|
-| `InferenceService` silently falls back to mock | Yes | `backend/app/services/inference.py`: `mock_mode` defaults to `True`; with no model it logs a warning and returns hash-seeded fake boxes. |
-| Quality checks are PIL-based | Yes | `backend/app/utils/image_quality.py` uses `ImageStat` and `FIND_EDGES`. |
-| No weights, no images | Yes | `/models/` is git-ignored and empty; `datasets/vj_items/images/*` hold only `.gitkeep`; `datasets/vj_items/raw/` does not exist. |
-| No AWS infra | Yes | `infra/` contains only `db/init/001_extensions.sql`. |
-| Storage layer uses boto3 | Yes | `backend/app/services/storage.py` uses `boto3.client("s3", endpoint_url=MinIO)`. |
-| Ultralytics in the runtime | Yes | `backend/requirements.txt` pins `ultralytics==8.3.0` (grandfathered in the license gate). |
+| M1 photo → count via OpenCV 5 DNN | done (code) | `backend/app/services/detector_cv.py`; `tests/test_detector_cv.py` (cv2.dnn round trip under AUTO/NEW/CLASSIC); YOLOX export verified to load in `cv2.dnn` (synthetic mechanics check) |
+| M2 tool library | done | `backend/app/agent/tools/*`; `tests/test_agent_tools.py` |
+| M3 bounded agent | done | `controller.py`, `policy.py`; `tests/test_agent_policy.py`, `tests/test_agent_controller.py` |
+| M4 approval gate | done | `api/routes/agent.py`; `tests/test_agent_api.py::test_approval_gate_cannot_be_bypassed` |
+| M5 trace + audit | done | `agent_steps` (migration 0004), `trace.py`; API tests |
+| M6 mobile UI | done | `frontend/src/app/scan`, `review/[id]`; vitest page tests; mobile-viewport run |
+| M7 AWS Graviton, S3, CloudWatch | code done, **not deployed** | `infra/aws/` (31 tests, synth); B-002 |
+| M8 honest evaluation | harness done, **no results** | `training/scripts/agent_eval.py`; B-001 |
 
-Baseline before any change: backend `pytest` 42 passed; frontend `vitest` 18 passed;
-`ruff` clean; `next lint` clean. The Docker daemon starts in this container
-(`dockerd`); `ffmpeg`, `aws` and `cdk` are not installed.
+## SPEC §7 gates
 
-## OWNER CHECKPOINT A (open; work continues meanwhile)
+| Gate | State | Evidence |
+|---|---|---|
+| G1 OpenCV 5.x test + `/health` | ✅ | `tests/test_opencv5.py`; `/health` → `"opencv":"5.0.0"` (local stack, and the arm64 image under QEMU) |
+| G2 no Ultralytics; license gate | ✅ | `scripts/license_gate.py`: OK, the grandfather list is empty and runtime manifests can never be grandfathered |
+| G3 lint + tests green | ✅ | `make lint` green; `make test`: backend **192 passed, 1 skipped** (the online Postgres test runs with `TEST_DATABASE_URL`, and passed manually), frontend **48 passed**; infra **31 passed**; CI green on 10d8493 and 416199c |
+| G4 tests for tools, branches, routes, migration | ✅ | including budget exhaustion (steps and time), planner failure and illegal proposals, and the approval gate |
+| G5 multi-arch image, arm64 runs | ✅ locally / ⏳ Graviton | buildx amd64+arm64 built; arm64 `/health` under QEMU; CI docker-build job (multi-arch) green |
+| G6 public HTTPS endpoint, 3 demo trays | ⏳ | B-002 (credentials) and B-001 (demo photos) |
+| G7 RESULTS.md from the frozen real test set | ⏳ | B-001 |
+| G8 report PDF, diagrams, trace demo, source archive | ✅ (numbers pending) | `docs/competition/TECHNICAL_REPORT.{md,pdf}`, `architecture.png`, `agent_workflow.png`, `trace_demo/`, `make source-archive` |
+| G9 video renders + runbook | ✅ pipeline / ⏳ real render | `demo/video/`, `docs/competition/VIDEO_RUNBOOK.md` |
 
-1. At least 150 real tray photos in `datasets/vj_items/raw/`, with varied
-   light and angles and about 30 hard cases (glare, blur, dense). Also 3
-   "yesterday vs today" pairs of the same tray (name them
-   `pairs/<tray>_prev.jpg` and `pairs/<tray>_curr.jpg`), and demo trays
-   `demo/A_clean.jpg`, `demo/B_glare.jpg`, `demo/B_reshot.jpg`,
-   `demo/C_dense.jpg` and `demo/C_prev.jpg`, with the POS count for C.
-2. AWS credentials and a region (`ap-southeast-1` suggested).
-3. Approval to remove `ml/`, `reports/gate0a/` and `tools/camsim/` from this
-   branch only.
-4. Will judges get repo access, or a source archive?
+## Owner actions (in order)
 
-## Phase 1: done (2026-09-25)
+1. **Photos** (B-001): at least 150 real tray photos in `datasets/vj_items/raw/` (about 30 hard ones in `raw/hard/`), 3 pairs in `raw/pairs/`, and the demo trays in `raw/demo/`: `A_clean`, `B_glare`, `B_reshot`, `C_dense`, `C_prev`, with the POS counts.
+2. **AWS** (B-002): credentials for `ap-southeast-1` (or another region). Approve the running cost: t4g.large is roughly $50/month on-demand (check the current price).
+3. **Labels:** review the pre-labels in CVAT (`docs/competition/LABELING_HOWTO.md`, about 30 s per image).
+4. **Decisions:** COOL subscription yes/no (B-005); removing the football directories yes/no (B-004); repo access or source archive for the judges; mark the GitGuardian findings as false positives (B-006).
+5. **After those:** the engineer trains, evaluates, deploys and records. The owner then records the team intro (`demo/video/raw/team_intro.mp4`), re-renders (`demo/video/build.sh`), uploads the video, pastes `DEVPOST_SUBMISSION.md` and submits.
 
-- `opencv-python-headless==5.0.0.93` pinned; `ultralytics` and `onnxruntime` removed from
-  the runtime; the license gate now refuses any grandfathering of runtime manifests.
-- `backend/app/utils/image_quality.py`: rewritten in cv2 (Laplacian variance inside the
-  eroded tray, HSV glare ratio, p99 brightness, histogram clipping, tray coverage),
-  with the same `ImageQuality(score, flags, metrics)` shape.
-- `backend/app/services/detector_cv.py`: YOLOX ONNX through `cv2.dnn.readNetFromONNX`
-  (engine AUTO/NEW/CLASSIC), letterbox, grid decode and `cv2.dnn.NMSBoxes`; an OpenCV
-  classical baseline; an explicit mock.
-- Mock is explicit only. A missing model gives `detector.ready=false` in `/health` and
-  HTTP 503 `DETECTOR_UNAVAILABLE`, never fake boxes.
-- `/health` and `/api/health` expose `opencv` (5.0.0) and the detector status.
-- Multi-arch Dockerfile: amd64 and arm64 both built; the arm64 image ran under QEMU
-  and `/health` returned `opencv 5.0.0` on `aarch64`.
-- Faces blurred before storage (YuNet via `cv2.FaceDetectorYN`).
-- Alembic fixed (async env) and migration 0004 (`agent_steps`, scan agent/approval
-  columns) verified on Postgres 16.
-- `make lint` green; `make test`: backend 86 passed / 1 skipped, frontend 18 passed.
+## Engineer next steps once photos and AWS arrive
 
-## Phases 3 and 4: done (2026-09-25)
+`make data-ingest` → `make data-prelabel` → CVAT review → `cvat_tasks.py export-yolo` + `unpack-export`
+→ `make data-split` → `make train-yolox` (GPU or CPU) → commit `models/trayagent_v1.{json,sha256}`
+→ calibrate the `PolicyConfig` thresholds on **val** → `scripts/aws/deploy.sh` with `MODEL_PATH`
+→ `make eval-agent MACHINE=t4g.large` **on the Graviton host** → `scripts/export_trace_demo.py api …`
+→ update the report's section 6 from RESULTS.md → `RECORD=1 BASE_URL=… demo/video/build.sh`.
 
-- `backend/app/agent/tools/`: `assess_quality`, `rectify_tray`, `detect`, `tile_detect`,
-  `zoom_recount`, `reduce_glare`, `compare_previous` (ORB→SIFT, RANSAC homography,
-  `absdiff`) and `render_evidence`. All are pure functions with typed results and evidence images.
-- `backend/app/agent/policy.py`: the SPEC §4.4 policy as a pure `decide()`, plus the
-  `allowed_actions()` guardrails.
-- `backend/app/agent/controller.py`: bounded loop (5 steps / 20 s) with forced
-  `escalate(budget_exhausted)`; every tool call is traced with its evidence key and latency.
-- `backend/app/agent/planner.py`: optional Bedrock Converse tool-use planner. Illegal or
-  failed proposals fall back to deterministic (traced as `planner_fallback`).
-- `backend/app/agent/trace.py`: `agent_steps` rows, plus an `AuditEvent` per decision and a
-  run-completed event.
-- Routes: `POST /scans` (agent behind `AGENT_ENABLED`, `parent_scan_id` for re-shots),
-  `POST /scans/{id}/agent-run`, `GET /scans/{id}/trace` (live plus persisted),
-  `POST /scans/{id}/approve`. New statuses: `needs_recapture`, `awaiting_approval`,
-  `superseded`.
-- Tests cover every policy branch, the budget (steps and time), planner failure and
-  illegal proposals, and the approval gate (review, resolve and re-run all refused; the
-  approver is mandatory).
+## Unverified / not measured
 
-## Next
-
-Phase 5 frontend, then Phase 6 AWS CDK and local deploy. Phase 2 tooling is built in
-parallel while waiting for photos.
+- **No accuracy, no Graviton latency, no COOL numbers exist.** Every number in the repository
+  so far comes from tests or engineering checks on synthetic fixtures, and is labelled as such.
+- The CDK stack, `deploy.sh`, `teardown.sh`, CloudFront and the CloudWatch alarms have never run
+  against AWS.
+- The Bedrock planner has only been tested against a fake client. The model id must be set by the owner.
+- The Polly narration was not produced; the rehearsal used espeak-ng.
+- OWLv2 pre-labelling was not run: Hugging Face is blocked in the dev sandbox.
+- Engineering note: in the x86 dev container, the COCO YOLOX-nano 416 forward took about 12 ms with
+  `ENGINE_NEW` vs about 26 ms with `ENGINE_CLASSIC`. This is not a result.
 
 ## Blockers
-
-See `BLOCKERS.md` (B-001 photos, B-002 AWS, B-003 spec authored, B-004 football dirs).
-
-## Unverified
-
-- No accuracy, Graviton latency or COOL numbers exist yet.
-- Engineering note (not a result): on this x86 dev container, a COCO YOLOX-nano ONNX
-  forward at 416×416 took about 12 ms with `ENGINE_NEW` and about 26 ms with
-  `ENGINE_CLASSIC` (5 runs, after warm-up). This will be re-measured properly in Phase 7/8.
+See `BLOCKERS.md` (B-001 to B-006).
