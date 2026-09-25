@@ -93,10 +93,13 @@ services:
       retries: 10
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Inlined into the bundle at build time by Next.js (a runtime env var has no effect).
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api/v1}
+        BASE_IMAGE: ${FRONTEND_BASE_IMAGE:-public.ecr.aws/docker/library/node:20-alpine}
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost/api/v1}
     expose:
       - "3000"
     ports:
