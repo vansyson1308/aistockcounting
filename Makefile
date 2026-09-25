@@ -151,3 +151,14 @@ aws-deploy:
 
 aws-teardown:
 	scripts/aws/teardown.sh
+
+# --- Submission ---
+report-pdf:
+	python docs/competition/build_report_pdf.py
+
+diagrams:
+	cd docs/competition/diagrams && dot -Tpng -Gdpi=150 architecture.dot -o ../architecture.png && dot -Tpng -Gdpi=150 agent_workflow.dot -o ../agent_workflow.png
+
+source-archive:
+	git archive --format=zip --prefix=trayagent/ -o docs/competition/trayagent_source.zip HEAD
+	@echo "docs/competition/trayagent_source.zip ($$(du -h docs/competition/trayagent_source.zip | cut -f1)) from $$(git rev-parse --short HEAD)"

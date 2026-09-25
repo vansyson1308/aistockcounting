@@ -9,3 +9,5 @@ aiosqlite==0.20.0
 # onnx is only used by tests to build tiny synthetic graphs for the cv2.dnn decode path
 onnx==1.16.2
 pyyaml==6.0.3
+markdown==3.9
+playwright==1.63.0  # demo/video/record.py and the report PDF (uses the system Chromium)

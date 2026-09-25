@@ -67,3 +67,4 @@ data/
 
 # Vendored small models (license: see THIRD_PARTY_NOTICES.md)
 !backend/app/assets/*.onnx
+docs/competition/trayagent_source.zip
