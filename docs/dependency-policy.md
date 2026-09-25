@@ -49,6 +49,8 @@ inventory app pins `ultralytics` in `backend/requirements.txt` and
 license gate until the Phase 0b migration deletes the legacy inference path.
 New code must not import ultralytics; the gate bans it everywhere else. |
 
+| 2026-09-25 | **Legacy exception closed.** The backend runtime moved to OpenCV 5 DNN (`opencv-python-headless==5.0.0.93`) serving a YOLOX (Apache-2.0) ONNX model. `ultralytics` and `onnxruntime` left `backend/requirements.txt`, and `training/requirements-train.txt` was replaced by `training/requirements-yolox.txt`. `GRANDFATHERED` is now empty, and runtime manifests may never be grandfathered again (the gate enforces this). |
+
 ## Adding a dependency
 
 1. Verify the license against the upstream LICENSE file (not a package index

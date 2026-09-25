@@ -88,7 +88,10 @@ def main() -> None:
     parser.add_argument("--tray-id")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--out", default="datasets/vj_items/images/all")
-    parser.add_argument("--database-url", default="postgresql+asyncpg://postgres:postgres@localhost:5432/stockdb")
+    parser.add_argument(
+        "--database-url",
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/stockdb",
+    )
     parser.add_argument("--minio-endpoint", default="localhost:9000")
     parser.add_argument("--minio-access-key", default="minioadmin")
     parser.add_argument("--minio-secret-key", default="minioadmin")

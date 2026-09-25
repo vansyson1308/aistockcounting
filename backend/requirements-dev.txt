@@ -8,3 +8,4 @@ mypy==1.11.1
 aiosqlite==0.20.0
 # onnx is only used by tests to build tiny synthetic graphs for the cv2.dnn decode path
 onnx==1.16.2
+pyyaml==6.0.3

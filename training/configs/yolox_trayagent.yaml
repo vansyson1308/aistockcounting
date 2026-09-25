@@ -1,0 +1,23 @@
+# TrayAgent detector: YOLOX (Apache-2.0), single class "item".
+# Reproducible: fixed seed, fixed split (datasets/vj_items/splits), pinned code (yolox==0.3.0).
+model: yolox_s            # nano | tiny | s | m
+input_size: [640, 640]    # (h, w); the ONNX sidecar records it for OpenCV DNN
+epochs: 120
+no_aug_epochs: 15         # final epochs without mosaic/mixup (YOLOX recipe)
+warmup_epochs: 3
+batch_size: 8
+seed: 42
+num_workers: 2
+basic_lr_per_img: 0.00015625   # 0.01 / 64 (YOLOX default)
+mosaic_prob: 1.0
+mixup_prob: 0.5
+eval_interval: 5          # epochs between val mAP@0.5 checks (best checkpoint by val)
+# COCO-pretrained YOLOX-S from the official YOLOX release (Apache-2.0 code; weights
+# trained on COCO, whose annotations are CC BY 4.0; provenance recorded in the model card).
+pretrained: https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.pth
+dataset_root: datasets/vj_items
+output_dir: outputs/yolox
+export:
+  name: trayagent_v1
+  version: v1
+  opset: 11

@@ -48,10 +48,7 @@ label-export-images:
 	python tools/labeling/export_images.py --out datasets/vj_items/images/all --limit $${LIMIT:-5}
 	@echo "Next: make dataset-split"
 
-dataset-split:
-	python tools/labeling/split_dataset.py --in datasets/vj_items/images/all --seed $${SEED:-42}
-	@echo "Images and labels split into train/val/test"
-	@echo "Next: make dataset-validate"
+dataset-split: data-split
 
 dataset-validate:
 	python tools/labeling/validate_dataset.py --root datasets/vj_items
@@ -63,32 +60,32 @@ cvat-export-yolo:
 	python tools/labeling/cvat_tasks.py export-yolo --task-id $${TASK_ID:?Set TASK_ID=} --out-zip $${OUT_ZIP:-datasets/vj_items/cvat_export.zip}
 
 train-venv:
-	python -m venv .venv-train && . .venv-train/bin/activate && pip install -r training/requirements-train.txt
-	@echo "Activate via: source .venv-train/bin/activate"
+	python3 -m venv .venv-train && .venv-train/bin/pip install -r training/requirements-yolox.txt
+	.venv-train/bin/pip install --no-deps --no-build-isolation yolox==0.3.0
 
-train-yolo:
-	python training/scripts/train.py --config training/configs/yolo_v1.yaml
-	@echo "Next: make eval-yolo RUN_DIR=outputs/vj_items/<run>"
+data-ingest:
+	python tools/labeling/ingest_raw.py
 
-eval-yolo:
-	python training/scripts/eval.py --run-dir $${RUN_DIR:?Set RUN_DIR=outputs/vj_items/<run_dir>}
-	python training/scripts/count_accuracy.py --run-dir $${RUN_DIR:?Set RUN_DIR=outputs/vj_items/<run_dir>}
-	@echo "Next: make export-model VERSION=v0001 RUN_DIR=$${RUN_DIR}"
+data-prelabel:
+	python tools/labeling/prelabel.py --backend $${BACKEND:-owlv2}
 
-export-model:
-	python training/scripts/export.py --version $${VERSION:?Set VERSION=v0001} --run-dir $${RUN_DIR:?Set RUN_DIR=outputs/vj_items/<run_dir>}
-	@echo "Set MODEL_PT_PATH/MODEL_ONNX_PATH and run make model-smoke IMAGE=scripts/generated_sample.jpg"
+data-split:
+	python tools/labeling/split_dataset.py --seed $${SEED:-42}
 
-train-pipeline:
-	python training/scripts/train_pipeline.py --config training/configs/yolo_v1.yaml --version $${VERSION:?Set VERSION=v0001}
+data-verify:
+	python tools/labeling/split_dataset.py --verify
 
-train-all:
-	$(MAKE) dataset-split
-	$(MAKE) dataset-validate
-	$(MAKE) train-pipeline VERSION=$${VERSION:?Set VERSION=v0001}
+train-yolox:
+	.venv-train/bin/python training/train_yolox.py all --config $${CONFIG:-training/configs/yolox_trayagent.yaml}
+
+fetch-model:
+	scripts/fetch_model.sh
+
+eval-agent:
+	python training/scripts/agent_eval.py --backend $${BACKEND:-onnx} --model $${MODEL:-models/trayagent_v1.onnx} --machine $${MACHINE:-local} --out reports/agentic
 
 model-smoke:
-	python backend/tools/model_smoke_test.py --image $${IMAGE:?Set IMAGE=path/to/generated_sample.jpg}
+	python backend/tools/model_smoke_test.py --image $${IMAGE:?Set IMAGE=path/to/image.jpg}
 
 backend-dev:
 	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

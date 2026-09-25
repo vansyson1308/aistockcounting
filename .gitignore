@@ -25,7 +25,11 @@ frontend/.next/
 frontend/tsconfig.tsbuildinfo
 
 # Model weights & training outputs (large binary files)
-/models/
+/models/*
+!/models/README.md
+!/models/*.sha256
+!/models/*.json
+!/models/*.source
 outputs/
 runs/
 *.pt
