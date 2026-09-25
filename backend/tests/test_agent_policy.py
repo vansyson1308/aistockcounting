@@ -166,6 +166,7 @@ def test_weak_evidence_escalates(kw, code) -> None:
         {"mean_conf": 0.3},
         {"glare_ratio": 0.2},
         {"count": 0, "expected_count": 0},
+        {"view_conflicts": 1, "tiled": True, "zoomed": True},
     ],
 )
 def test_guardrail_never_allows_auto_accept_on_weak_evidence(kw) -> None:
@@ -187,3 +188,10 @@ def test_actions_are_not_repeated() -> None:
     allowed = allowed_actions(obs, CFG)
     for a in (Action.TILE, Action.ZOOM, Action.COMPARE, Action.COUNT, Action.ASSESS):
         assert a not in allowed
+
+
+def test_view_conflict_escalates_even_when_count_matches_pos() -> None:
+    obs = counted(view_conflicts=2, tiled=True, zoomed=True, single_shot_count=13)
+    d = decide(obs, CFG)
+    assert d.action == Action.ESCALATE and d.code == "view_conflict"
+    assert "disagree in 2 cell(s)" in d.reason

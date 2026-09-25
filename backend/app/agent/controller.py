@@ -479,6 +479,7 @@ def _act(
                 n_tiled < n_single
             ):  # tiling lost items here: a human or zoom should look
                 uncertain.append(cell)
+                obs.view_conflicts += 1
         st.uncertain = uncertain
         obs.tiled = True
         _refresh_counts(st, obs)

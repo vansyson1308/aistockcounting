@@ -84,6 +84,9 @@ class Observation:
     single_shot_count: int | None = None
     mean_conf: float = 0.0
     uncertain_regions: int = 0
+    # cells where the tiled pass found FEWER items than the single shot: the two
+    # views of the same tray disagree, so no automatic acceptance (D-017)
+    view_conflicts: int = 0
     median_box_frac: float = 0.0
     crowding: float = 0.0
     # compare_previous
@@ -136,6 +139,7 @@ def can_auto_accept(obs: Observation, cfg: PolicyConfig) -> bool:
         obs.counted
         and not obs.mismatch
         and obs.uncertain_regions == 0
+        and obs.view_conflicts == 0
         and obs.mean_conf >= cfg.accept_conf
         and not obs.degraded(cfg)
         and (obs.count or 0) > 0
@@ -284,6 +288,12 @@ def escalation(
     if obs.uncertain_regions:
         parts.append(f"{obs.uncertain_regions} region(s) still uncertain")
         code = code or "uncertain_regions"
+    if obs.view_conflicts:
+        parts.append(
+            f"single-shot and tiled counts disagree in {obs.view_conflicts} cell(s) "
+            f"(single {obs.single_shot_count}, final {obs.count})"
+        )
+        code = code or "view_conflict"
     if obs.counted and obs.mean_conf < cfg.accept_conf:
         parts.append(f"mean confidence {obs.mean_conf:.2f} < {cfg.accept_conf}")
         code = code or "low_confidence"

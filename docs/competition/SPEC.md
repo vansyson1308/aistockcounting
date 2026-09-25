@@ -115,7 +115,8 @@ resolved region updates the count.
 
 Reconcile with POS:
 - No POS count, or count == expected, and `uncertain_after == 0` and
-  `mean_conf >= ACCEPT_CONF` and quality is not degraded → `auto_accept`
+  no view conflict (a tile cell where the tiled pass found fewer items than the single
+  shot; DECISIONS D-017) and `mean_conf >= ACCEPT_CONF` and quality is not degraded → `auto_accept`
   (when there is no POS count, the scan is only marked pending review;
   nothing is written to inventory).
 - Count ≠ expected (mismatch): if a previous approved photo exists and the

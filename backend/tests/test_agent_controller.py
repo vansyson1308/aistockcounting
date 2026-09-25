@@ -333,3 +333,18 @@ def test_build_planner_defaults(monkeypatch) -> None:
     assert build_planner(S()).name == "deterministic"  # no model id configured
     S.bedrock_model_id = "some-model"
     assert build_planner(S()).name == "bedrock"
+
+
+def test_glare_false_item_confirmed_by_zoom_is_not_auto_accepted() -> None:
+    # Regression: a glare blob became a false single-shot item, tiling dropped it, and
+    # zoom re-confirmed it so the count matched a stale POS. The agent must not auto-accept.
+    curr = make_tray(
+        n_items=90,
+        item_radius=(8, 11),
+        seed=77,
+        tray_frac=1.0,
+        exclude_items=[33],
+        glare=0.012,
+    )
+    r = run_agent(curr.image, detector=DET, expected_count=90)
+    assert r.action != Action.AUTO_ACCEPT or r.count == 89
