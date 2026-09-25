@@ -2,7 +2,7 @@
 
 Offline (SQL-generation) tests always run. The online upgrade/downgrade
 round trip runs when TEST_DATABASE_URL points at a Postgres database, e.g.
-``postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/stockdb``.
+``postgresql+asyncpg://<user>:<password>@127.0.0.1:55432/stockdb``.
 """
 
 import io

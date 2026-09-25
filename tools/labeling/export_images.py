@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 from pathlib import Path
 
 import boto3
@@ -82,21 +83,24 @@ async def run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    load_env_file(".env")
     parser = argparse.ArgumentParser()
     parser.add_argument("--date-from")
     parser.add_argument("--date-to")
     parser.add_argument("--tray-id")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--out", default="datasets/vj_items/images/all")
+    # Credentials come from the environment (.env), never from defaults in code.
+    parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
     parser.add_argument(
-        "--database-url",
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/stockdb",
+        "--minio-endpoint", default=os.getenv("MINIO_ENDPOINT", "localhost:9000")
     )
-    parser.add_argument("--minio-endpoint", default="localhost:9000")
-    parser.add_argument("--minio-access-key", default="minioadmin")
-    parser.add_argument("--minio-secret-key", default="minioadmin")
+    parser.add_argument("--minio-access-key", default=os.getenv("MINIO_ACCESS_KEY"))
+    parser.add_argument("--minio-secret-key", default=os.getenv("MINIO_SECRET_KEY"))
     parser.add_argument("--minio-bucket", default="tray-images")
     args = parser.parse_args()
+    if not args.database_url:
+        raise SystemExit("set DATABASE_URL (see .env.example) or pass --database-url")
     asyncio.run(run(args))
 
 

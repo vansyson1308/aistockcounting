@@ -33,7 +33,7 @@ def test_scan_manifest_flags_banned(tmp_path):
 
 def test_runtime_manifest_is_never_grandfathered(tmp_path):
     # The legacy exception closed on 2026-09-25 (OpenCV 5 migration).
-    assert license_gate.GRANDFATHERED == set()
+    assert not license_gate.GRANDFATHERED
     manifest = tmp_path / "backend" / "requirements.txt"
     manifest.parent.mkdir()
     manifest.write_text("ultralytics==8.3.0\n")

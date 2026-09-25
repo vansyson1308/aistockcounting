@@ -84,7 +84,8 @@ def host(tmp_path: Path) -> Path:
     (opt / "instance.env").write_text(
         "AWS_REGION=ap-southeast-1\nPARAM_PREFIX=/trayagent/TrayAgent\n"
     )
-    (opt / "secrets.env").write_text("POSTGRES_PASSWORD=s3cret\n")
+    fake = "unit-test-placeholder"  # not a secret: exercises the .env assembly only
+    (opt / "secrets.env").write_text(f"POSTGRES_PASSWORD={fake}\n")
     # An older, still working version is installed; SSM holds the current one.
     (opt / "update.sh").write_text(
         UPDATE_SH.replace("TrayAgent is up", "OLD VERSION is up")
@@ -126,7 +127,7 @@ def test_self_update_env_and_compose(host: Path) -> None:
     assert "TrayAgent is up: IMAGE_TAG=abc1234" in result.stdout
     env = _env_file(host)
     assert env["IMAGE_TAG"] == "abc1234"
-    assert env["POSTGRES_PASSWORD"] == "s3cret"
+    assert env["POSTGRES_PASSWORD"] == "unit-test-placeholder"
     assert env["DETECTOR_BACKEND"] == "classical"
     assert oct((host / "opt" / ".env").stat().st_mode & 0o777) == "0o600"
     assert (host / "opt" / "docker-compose.yml").read_text() == "name: trayagent\n"
