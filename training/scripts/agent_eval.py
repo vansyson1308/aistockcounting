@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -51,13 +51,14 @@ sys.path.insert(0, str(REPO / "tools" / "labeling"))
 sys.path.insert(0, str(REPO))
 
 from app.agent.controller import MemoryEvidenceStore, run_agent  # noqa: E402
-from app.agent.policy import Action, PolicyConfig  # noqa: E402
+from app.agent.policy import PolicyConfig  # noqa: E402
 from app.services.detector_cv import build_detector  # noqa: E402
-from training.metrics import (
+
+from training.metrics import (  # noqa: E402
     average_precision,
     count_metrics,
     read_yolo_labels,
-)  # noqa: E402
+)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 REGIMES = ("pos_correct", "pos_none", "pos_wrong")
@@ -238,7 +239,7 @@ def summarize(
     return {
         "reportable": reportable,
         "banner": banner,
-        "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "commit": git_commit(),
         "machine": args.machine or platform.machine(),
         "cpu": platform.processor() or platform.machine(),
@@ -432,7 +433,7 @@ def plots(out: Path, rows, summary) -> None:
     bins = np.arange(lo, hi) - 0.5
     ax.hist(err_single, bins=bins, alpha=0.6, label="single shot", color="#8a8f98")
     ax.hist(err_agent, bins=bins, alpha=0.8, label="TrayAgent", color="#2b6cb0")
-    ax.set_xlabel("count error (predicted − true)")
+    ax.set_xlabel("count error (predicted - true)")
     ax.set_ylabel("test images")
     ax.legend(frameon=False)
     ax.spines[["top", "right"]].set_visible(False)

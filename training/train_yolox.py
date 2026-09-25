@@ -16,7 +16,7 @@
   mosaic, optimizer, warm-cos LR, EMA), because the official Trainer is CUDA-only.
   The best checkpoint is chosen by val mAP@0.5.
 * ``export`` writes ``models/<name>.onnx`` (``decode_in_inference=False``, opset 11,
-  input ``images`` 1×3×H×W BGR 0..255, top-left letterbox padded with 114) plus the
+  input ``images`` 1x3xHxW BGR 0..255, top-left letterbox padded with 114) plus the
   sidecar ``models/<name>.json`` that ``backend/app/services/detector_cv.py`` reads,
   plus ``models/<name>.sha256``. It then checks that ``cv2.dnn`` loads the model.
 """
@@ -30,7 +30,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -149,7 +149,7 @@ def make_exp(cfg: dict, run_dir: Path):
         def get_model(self):
             if getattr(self, "model", None) is None and self.depthwise:
                 import torch.nn as nn
-                from yolox.models import YOLOX, YOLOPAFPN, YOLOXHead
+                from yolox.models import YOLOPAFPN, YOLOX, YOLOXHead
 
                 in_channels = [256, 512, 1024]
                 backbone = YOLOPAFPN(
@@ -405,7 +405,7 @@ def export(cfg: dict, ckpt_path: Path, out_dir: Path | None = None) -> Path:
         "checkpoint_epoch": ckpt.get("epoch"),
         "val_ap50": ckpt.get("val_ap50"),
         "sha256": digest,
-        "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     (out_dir / f"{name}.json").write_text(json.dumps(sidecar, indent=2) + "\n")
     (out_dir / f"{name}.sha256").write_text(f"{digest}  {name}.onnx\n")

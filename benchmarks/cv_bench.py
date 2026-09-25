@@ -9,12 +9,12 @@ line to ``--out``. ``--report`` renders all lines into ``reports/cool/RESULTS.md
     python benchmarks/cv_bench.py --report reports/cool/runs.jsonl
 
 Workloads:
-* primitives: ``resize`` (INTER_AREA 4032×3024 → 1024), ``adaptiveThreshold``
+* primitives: ``resize`` (INTER_AREA 4032x3024 → 1024), ``adaptiveThreshold``
   (Gaussian), ``findContours``, ``GaussianBlur``, ``cvtColor`` BGR→HSV, ``warpPerspective``;
 * TrayAgent tools: ``assess_quality``, ``rectify_tray`` and ``tile_detect`` (with
   the OpenCV classical detector, or ``--model`` for the ONNX detector).
 
-Inputs are procedurally drawn trays at phone resolution (4032×3024). They are
+Inputs are procedurally drawn trays at phone resolution (4032x3024). They are
 timing inputs only, and the accuracy of anything on them is irrelevant. The
 OpenCV build information is recorded, so a COOL/KleidiCV build is visible in
 the report.
@@ -28,7 +28,7 @@ import platform
 import statistics
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -125,7 +125,7 @@ def run(label: str, repeat: int, model: str | None) -> dict:
     }
     return {
         "label": label,
-        "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "date": datetime.now(UTC).isoformat(timespec="seconds"),
         "machine": platform.machine(),
         "python": platform.python_version(),
         "detector": getattr(det, "name", "?"),
@@ -154,7 +154,7 @@ def report(runs_path: Path) -> str:
         for r in runs:
             v = r["results"][k]["median_ms"]
             b = base["results"][k]["median_ms"]
-            cells.append(f"{v:.2f}" + ("" if r is base else f" ({b / v:.2f}×)"))
+            cells.append(f"{v:.2f}" + ("" if r is base else f" ({b / v:.2f}x)"))
         out.append(f"| `{k}` | " + " | ".join(cells) + " |")
     out += ["", "## Runs", ""]
     for r in runs:

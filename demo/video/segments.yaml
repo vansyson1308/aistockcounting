@@ -1,0 +1,90 @@
+# Machine-readable version of script.md. build.sh renders it into trayagent_demo.mp4.
+# kind: intro | slide | recording
+# Each segment lasts max(narration audio + pad, its visual length), and the whole video must be <= 300 s.
+segments:
+  - id: intro
+    kind: intro
+    source: raw/team_intro.mp4        # the owner records this; a title card is used if missing
+    title: "TrayAgent"
+    subtitle: "Verified jewelry tray counts: OpenCV 5 agent on AWS Graviton"
+    max_seconds: 30
+    narration: ""
+  - id: problem
+    kind: slide
+    title: "The problem"
+    bullets:
+      - "Jewelry stores count every tray, every day, by eye"
+      - "Glare, blur and dense trays defeat a single-shot detector"
+      - "A wrong automatic count quietly changes inventory"
+    narration: >-
+      Every day, jewelry stores count every display tray by eye. It is slow, and it misses shrink.
+      A single photo and a single detector pass are not enough: gold reflects the ceiling lights,
+      phones blur, and trays are packed with small items. And a wrong automatic count is worse than no count,
+      because it silently changes inventory. TrayAgent treats counting as a decision, not a guess.
+  - id: tray_a
+    kind: recording
+    source: clips/tray_a.webm
+    title: "Tray A: clean photo"
+    bullets:
+      - "assess_quality: sharp, no glare, tray found"
+      - "rectify_tray + detect (OpenCV 5 DNN, YOLOX ONNX)"
+      - "count = POS: auto-accept, inventory unchanged"
+    narration: >-
+      Tray A is a clean photo. The agent first checks the photo with OpenCV: sharpness, glare, and whether the tray is in frame.
+      It straightens the tray with a homography, then counts with a YOLOX model running on the OpenCV 5 DNN engine.
+      The count matches the point-of-sale figure, the evidence is confident, so the agent accepts it. Nothing in inventory changes.
+  - id: tray_b
+    kind: recording
+    source: clips/tray_b.webm
+    title: "Tray B: glare → a specific re-shot"
+    bullets:
+      - "HSV highlight mask: glare over the threshold"
+      - "The agent asks for a specific re-shot, not a guess"
+      - "Re-shot: clean → accepted, linked to the first attempt"
+    narration: >-
+      Tray B has glare. OpenCV's highlight mask shows the reflection hiding part of the tray,
+      so instead of guessing, the agent asks the staff member for a specific re-shot: tilt the phone about fifteen degrees away from the light.
+      The new photo is clean, the count matches, and the re-shot is linked to the first attempt in the audit trail.
+  - id: tray_c
+    kind: recording
+    source: clips/tray_c.webm
+    title: "Tray C: dense + POS mismatch → human"
+    bullets:
+      - "Dense tray → tile_detect; uncertain regions → zoom_recount"
+      - "Count ≠ POS → compare_previous (ORB + homography + absdiff)"
+      - "Escalated with annotated evidence; a manager approves"
+    narration: >-
+      Tray C is dense, and its count disagrees with the point-of-sale system.
+      Because the items are small and crowded, the agent re-detects on overlapping tiles and zooms into the regions it is unsure about.
+      The count is still one short, so it aligns yesterday's approved photo with feature matching and a homography, and diffs the two.
+      One changed region pinpoints the missing piece. The agent does not decide on its own: it escalates, with the evidence, and a manager approves.
+  - id: architecture
+    kind: slide
+    title: "Architecture"
+    image: ../../docs/competition/architecture.png
+    bullets:
+      - "OpenCV 5 tools in a bounded loop: at most 5 steps, 20 s"
+      - "EC2 Graviton (arm64) · S3 evidence · CloudWatch metrics and alarms · CloudFront HTTPS"
+      - "Every tool call traced; every decision in the audit log"
+    narration: >-
+      Under the hood, eight OpenCV 5 tools run inside a bounded loop of at most five steps and twenty seconds.
+      Each tool's output decides the next action. The whole system runs on an AWS Graviton instance,
+      with evidence in S3 and agent metrics and alarms in CloudWatch. Every tool call, reason and latency is traced.
+  - id: results
+    kind: slide
+    title: "Evaluation (frozen real test set)"
+    results_from: ../../reports/agentic/summary.json
+    narration: >-
+      We evaluated on a frozen test set of real tray photos, never used for training or tuning.
+      These are the measured numbers, including the failure cases, which are all in the report.
+  - id: limits
+    kind: slide
+    title: "Limitations and responsible use"
+    bullets:
+      - "A human approves every count that changes inventory"
+      - "Faces blurred before storage; evidence expires after 30 days"
+      - "Small dataset, one store: numbers will move with more data"
+    narration: >-
+      TrayAgent is honest about its limits. It was trained on a small set of photos from one store, so its numbers will change with more data.
+      A human approves every count that changes inventory. Faces are blurred before anything is stored, and evidence expires after thirty days.
+      Thank you.
