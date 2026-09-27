@@ -302,6 +302,21 @@ export default function ScanPage() {
         data.discrepancy ? 'The discrepancy is still open.' : 'The scan matches the expected count.'
       );
     } catch (err) {
+      if (
+        err instanceof ApiClientError &&
+        (err.code === 'AGENT_RUNNING' || err.code === 'SCAN_CHANGED')
+      ) {
+        // The agent run this page lost track of is still going (or just
+        // finished): show its result instead of the manual form.
+        const recovered = await recoverFromTrace(scan.id);
+        if (recovered) {
+          setError('');
+          announceOutcome(recovered);
+          return;
+        }
+        setError('TrayAgent is still counting this tray. Wait a few seconds, then save again.');
+        return;
+      }
       setError(errorMessage(err, 'Could not save the review.'));
     } finally {
       setReviewing(false);

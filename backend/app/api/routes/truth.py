@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.service import claim_is_fresh
 from app.core.audit import audit_log
 from app.core.cache import invalidate
 from app.core.config import get_settings
@@ -524,7 +525,7 @@ async def review_scan(
             "APPROVAL_REQUIRED",
             "This scan was escalated by the agent; use POST /scans/{id}/approve.",
         )
-    if scan.status == "agent_running":
+    if claim_is_fresh(scan):
         raise api_error(
             409,
             "AGENT_RUNNING",
@@ -659,6 +660,12 @@ async def resolve_discrepancy(
             409,
             "APPROVAL_REQUIRED",
             "The scan behind this discrepancy awaits human approval of its count first.",
+        )
+    if gated_scan is not None and claim_is_fresh(gated_scan):
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is recounting the scan behind this discrepancy; wait for it.",
         )
 
     discrepancy.status = payload.status

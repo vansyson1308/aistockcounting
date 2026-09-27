@@ -2,7 +2,8 @@
 
 ``unit_value`` lets every later count (agent re-run, approval, review) price
 its variance from one figure. ``reviewed_at`` marks a human review, so the
-agent never re-runs over a human's count.
+agent never re-runs over a human's count. ``version`` is the optimistic lock
+that stops a stale write (a review racing an agent run) from overwriting.
 
 Revision ID: 20260927_0005
 Revises: 20260925_0004
@@ -21,6 +22,10 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("scan_sessions", sa.Column("unit_value", sa.Float(), nullable=True))
     op.add_column("scan_sessions", sa.Column("reviewed_at", sa.DateTime(), nullable=True))
+    op.add_column(
+        "scan_sessions",
+        sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
+    )
     # Scans reviewed before this revision: the audit trail has the review.
     op.execute(
         "UPDATE scan_sessions SET reviewed_at = ("
@@ -55,5 +60,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_column("scan_sessions", "version")
     op.drop_column("scan_sessions", "reviewed_at")
     op.drop_column("scan_sessions", "unit_value")

@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -43,6 +43,19 @@ logger = logging.getLogger("app")
 GATED_STATUSES = {"awaiting_approval"}
 # A human rejected the count (or the re-shot that followed replaced it).
 REJECTED_STATUSES = ("needs_recapture", "superseded")
+# An agent_running claim older than this is from a run that died (worker
+# killed, restart): the scan may be re-run or reviewed by hand again. Runs
+# are capped far below it (policy time budget).
+CLAIM_STALE_AFTER = timedelta(minutes=5)
+
+
+def claim_is_fresh(scan: ScanSession, now: datetime | None = None) -> bool:
+    """True while an agent run holds this scan."""
+    if scan.status != "agent_running":
+        return False
+    if scan.updated_at is None:
+        return True
+    return scan.updated_at > (now or datetime.utcnow()) - CLAIM_STALE_AFTER
 
 
 class S3EvidenceStore:

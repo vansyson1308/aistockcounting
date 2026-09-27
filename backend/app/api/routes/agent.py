@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -11,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent import progress
 from app.agent.service import (
     agent_payload,
+    claim_is_fresh,
     close_open_discrepancies,
     mark_approved,
     run_for_scan,
@@ -37,6 +40,7 @@ from app.schemas.agent import (
 from app.services.inference import InferenceService
 from app.services.storage import StorageService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Agent"])
 
 # Statuses the agent may (re-)run from. It may never run over a pending human
@@ -109,45 +113,69 @@ async def agent_run(
             "AGENT_RUN_NOT_ALLOWED",
             "A human already decided this scan's count; the agent cannot re-run it.",
         )
-    # Claim the scan before the (slow) run: while it is agent_running, a
-    # review is refused, so a human count cannot be overwritten by a run that
-    # started before it. The claim is a compare-and-set on the state checked
-    # above, so a review that committed in between wins.
+    if claim_is_fresh(scan):
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is already counting this scan; wait for it to finish.",
+        )
+    # Claim the scan before the (slow) run. The claim is a compare-and-set on
+    # the version read above, so it fails if a human (or another run) changed
+    # the scan in between; while it is held, reviews and resolutions are
+    # refused. Every later ORM write checks the version too, so whichever of
+    # a run and a human write commits second fails instead of overwriting.
     previous_status = scan.status
     claimed = await db.execute(
         update(ScanSession)
-        .where(
-            ScanSession.id == scan.id,
-            ScanSession.status == previous_status,
-            ScanSession.approved_by.is_(None),
-            ScanSession.manual_count.is_(None),
-            ScanSession.reviewed_at.is_(None),
+        .where(ScanSession.id == scan.id, ScanSession.version == scan.version)
+        .values(
+            status="agent_running",
+            updated_at=datetime.utcnow(),
+            version=ScanSession.version + 1,
         )
-        .values(status="agent_running")
+        .execution_options(synchronize_session=False)
     )
     if claimed.rowcount != 1:
         await db.rollback()
         raise api_error(
             409,
-            "AGENT_RUN_NOT_ALLOWED",
+            "SCAN_CHANGED",
             "The scan changed before the agent could start; reload it.",
         )
     await db.commit()
+    await db.refresh(scan)
+    claim_version = scan.version
     try:
         result = await run_for_scan(
             db, scan, detector=inference.detector(), storage=storage
         )
-    except Exception:
-        # Release the claim so the scan can be reviewed by hand or re-run.
-        await db.rollback()
-        await db.execute(
-            update(ScanSession)
-            .where(ScanSession.id == scan_id, ScanSession.status == "agent_running")
-            .values(status=previous_status)
-        )
         await db.commit()
+    except BaseException:
+        # Release the claim (only if still ours) so the scan can be reviewed
+        # by hand or re-run; a claim that cannot be released goes stale.
+        await db.rollback()
+        try:
+            await db.execute(
+                update(ScanSession)
+                .where(
+                    ScanSession.id == scan_id,
+                    ScanSession.version == claim_version,
+                    ScanSession.status == "agent_running",
+                )
+                .values(
+                    status=(
+                        "pending_review"
+                        if previous_status == "agent_running"
+                        else previous_status
+                    ),
+                    version=ScanSession.version + 1,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            await db.commit()
+        except Exception:
+            logger.warning("could not release the agent claim on %s", scan_id)
         raise
-    await db.commit()
     await db.refresh(scan)
     discrepancy = await _open_discrepancy(db, scan.id)
     invalidate()
@@ -277,9 +305,9 @@ async def approve_scan(
             else None
         )
         mark_approved(scan, payload.approver_id)
-        if payload.unit_value is not None:
-            scan.unit_value = payload.unit_value  # kept even with no POS figure yet
         if scan.expected_count is None:
+            if payload.unit_value is not None:
+                scan.unit_value = payload.unit_value  # for a later POS figure
             scan.status = "reviewed"
             discrepancy = None
         else:

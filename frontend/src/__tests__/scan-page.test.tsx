@@ -87,6 +87,47 @@ async function selectPhotoAndStart() {
 }
 
 describe('ScanPage agent flow', () => {
+  it('shows the agent result when a manual review finds the agent still running', async () => {
+    mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
+    mockRun.mockRejectedValueOnce(new ApiClientError('NETWORK', 'Connection lost'));
+    mockTrace.mockResolvedValueOnce({
+      scan: makeScan({ status: 'agent_running' }),
+      latest_run_id: null,
+      steps: [],
+      runs: [],
+      live: null,
+    });
+    mockReview.mockRejectedValueOnce(
+      new ApiClientError('AGENT_RUNNING', 'The agent is counting this scan')
+    );
+    mockTrace.mockResolvedValue({
+      scan: makeScan({
+        status: 'reviewed',
+        agent_decision: 'auto_accept',
+        agent_count: 12,
+        final_count: 12,
+        expected_count: 12,
+        variance_count: 0,
+      }),
+      latest_run_id: 'r1',
+      steps: [],
+      runs: [],
+      live: null,
+    });
+
+    render(<ScanPage />);
+    await selectPhotoAndStart();
+    fireEvent.change(await screen.findByLabelText('Recounted quantity'), {
+      target: { value: '11' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Count matches POS' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Manual review' })).not.toBeInTheDocument();
+  });
+
   it('requires a counted quantity when the agent run failed before counting', async () => {
     mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
     mockRun.mockRejectedValueOnce(new ApiClientError('AGENT_FAILED', 'Agent crashed'));

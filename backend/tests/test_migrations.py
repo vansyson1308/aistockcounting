@@ -83,6 +83,10 @@ def test_scan_unit_value_migration_backfills(monkeypatch) -> None:
     sql = _offline_sql("20260925_0004:20260927_0005", monkeypatch)
     assert "ALTER TABLE scan_sessions ADD COLUMN unit_value" in sql
     assert "ALTER TABLE scan_sessions ADD COLUMN reviewed_at" in sql
+    assert (
+        "ALTER TABLE scan_sessions ADD COLUMN version INTEGER DEFAULT '1' NOT NULL"
+        in sql
+    )
     assert "SET reviewed_at = (" in sql and "'SCAN_REVIEWED'" in sql
     assert "SET unit_value = variance_value / variance_count" in sql
     assert "variance_count <> 0" in sql  # never divides by zero
@@ -90,7 +94,7 @@ def test_scan_unit_value_migration_backfills(monkeypatch) -> None:
     assert "manual_count IS NULL AND approved_by IS NULL" in sql
     assert "reviewed_at IS NULL" in sql and "COUNT(DISTINCT s.run_id)" in sql
     assert "payload_json ->> 'variance_count'" in sql  # single shot, re-run since
-    assert {"unit_value", "reviewed_at"} <= {
+    assert {"unit_value", "reviewed_at", "version"} <= {
         c.name for c in ScanSession.__table__.columns
     }
 

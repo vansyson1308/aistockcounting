@@ -117,6 +117,14 @@ class ScanSession(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(), server_default=func.now(), onupdate=func.now()
     )
+    # Optimistic lock: every ORM update checks and bumps it, so a write based
+    # on a stale read (a review racing an agent run, or two runs) fails with
+    # StaleDataError (409 SCAN_CHANGED) instead of overwriting the other one.
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
 
 class Discrepancy(Base):

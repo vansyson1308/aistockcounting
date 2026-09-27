@@ -423,15 +423,119 @@ async def test_agent_claim_loses_to_a_review_committed_first(
         client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
     )
     sid = body["scan"]["id"]
-    await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
-    await _set(sid, status="pending_review")  # runnable status, but reviewed
-    # the in-memory check misses the review (as if it committed right after)
-    monkeypatch.setattr(agent_routes, "_human_reviewed", lambda scan: False)
+    load = agent_routes._load_scan
+
+    async def load_then_review(db, scan_id, tenant):
+        scan = await load(db, scan_id, tenant)
+        # a review commits right after the agent read the scan
+        await _set(sid, manual_count=12, final_count=12, version=scan.version + 1)
+        return scan
+
+    monkeypatch.setattr(agent_routes, "_load_scan", load_then_review)
     r = await client.post(f"/api/v1/scans/{sid}/agent-run")
-    assert r.status_code == 409
-    assert "changed before the agent could start" in r.json()["error"]["message"]
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SCAN_CHANGED"
+    monkeypatch.undo()
     trace = (await client.get(f"/api/v1/scans/{sid}/trace")).json()["data"]
     assert trace["scan"]["final_count"] == 12
+    assert trace["scan"]["status"] == "pending_review"
+
+
+# A human write based on a read from before the claim fails, not overwrites.
+async def test_review_that_read_before_the_claim_is_refused(
+    client, agent_on, monkeypatch
+) -> None:
+    import app.api.routes.truth as truth_routes
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    upsert = truth_routes._upsert_discrepancy
+
+    async def claim_then_upsert(db, scan, **kwargs):
+        # the agent claims the scan while this review is being written
+        await _set(sid, status="agent_running", version=scan.version + 1)
+        return await upsert(db, scan, **kwargs)
+
+    monkeypatch.setattr(truth_routes, "_upsert_discrepancy", claim_then_upsert)
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SCAN_CHANGED"
+    async with _db() as db:
+        from app.models.truth import ScanSession
+
+        scan = await db.get(ScanSession, uuid.UUID(sid))
+        assert scan.manual_count is None and scan.status == "agent_running"
+
+
+# A run whose scan changed under it (stale claim taken over) writes nothing.
+async def test_agent_result_is_discarded_if_the_scan_changed(
+    client, agent_on, monkeypatch
+) -> None:
+    import app.api.routes.agent as agent_routes
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    run = agent_routes.run_for_scan
+
+    async def human_during_run(db, scan, **kwargs):
+        # a human write lands while the agent is counting (e.g. after its
+        # claim went stale): the run's write, checked against its claim
+        # version, must fail rather than overwrite it
+        await _set(
+            sid,
+            status="reviewed",
+            manual_count=13,
+            final_count=13,
+            version=scan.version + 1,
+        )
+        return await run(db, scan, **kwargs)
+
+    monkeypatch.setattr(agent_routes, "run_for_scan", human_during_run)
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SCAN_CHANGED"
+    async with _db() as db:
+        from app.models.truth import ScanSession
+
+        scan = await db.get(ScanSession, uuid.UUID(sid))
+        assert (scan.status, scan.final_count, scan.agent_count) == (
+            "reviewed",
+            13,
+            None,
+        )
+
+
+# One run at a time; a claim left by a dead run expires.
+async def test_second_run_is_refused_until_the_claim_goes_stale(
+    client, agent_on
+) -> None:
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=12, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    await _set(sid, status="agent_running", updated_at=datetime.utcnow())
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "AGENT_RUNNING"
+
+    await _set(sid, updated_at=datetime.utcnow() - timedelta(minutes=10))
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 200
+    assert r.json()["data"]["scan"]["status"] == "reviewed"  # 12 == POS
+
+
+async def test_stale_claim_does_not_block_a_manual_review(client, agent_on) -> None:
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    await _set(
+        sid,
+        status="agent_running",
+        updated_at=datetime.utcnow() - timedelta(minutes=10),
+    )
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    assert r.status_code == 200
 
 
 # A run that fails releases the claim, so the scan can still be reviewed.
