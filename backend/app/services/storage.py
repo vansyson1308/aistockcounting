@@ -9,6 +9,7 @@ from botocore.response import StreamingBody
 from PIL import Image
 
 from app.core.config import get_settings
+from app.utils.image_validation import JPEG_MAGIC, PNG_MAGIC
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,9 @@ def _image_ext(image_bytes: bytes, filename: str) -> str:
     client's filename can disagree with the bytes; the key and ContentType
     must describe what is actually stored.
     """
-    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+    if image_bytes.startswith(PNG_MAGIC):
         return ".png"
-    if image_bytes.startswith(b"\xff\xd8\xff"):
+    if image_bytes.startswith(JPEG_MAGIC):
         return ".jpg"
     ext = Path(filename).suffix.lower()
     return ext if ext in {".jpg", ".jpeg", ".png"} else ".jpg"

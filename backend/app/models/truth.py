@@ -111,6 +111,8 @@ class ScanSession(Base):
     agent_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    # Set by PATCH /review: a human's count is final, the agent never re-runs over it.
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(), server_default=func.now(), onupdate=func.now()

@@ -121,6 +121,29 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('button', { name: 'Approve agent count (23)' })).toBeEnabled();
   });
 
+  it('never shows the placeholder final count as the agent count', async () => {
+    mockTrace.mockResolvedValueOnce({
+      scan: {
+        ...scan,
+        agent_count: null,
+        detected_count: 0,
+        final_count: 0,
+        variance_count: null,
+      },
+      latest_run_id: 'r1',
+      runs: [{ run_id: 'r1', steps: [] }],
+      live: null,
+      steps: [],
+    });
+
+    render(<ReviewPage params={{ id: 'scan-9' }} />);
+
+    const label = await screen.findByText('Agent count');
+    expect(label.nextElementSibling).toHaveTextContent('—');
+    expect(screen.queryByText(/final approved count/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /no agent count to approve/i })).toBeDisabled();
+  });
+
   it('shows an error when the scan cannot be loaded', async () => {
     const { ApiClientError } = await import('@/lib/api');
     mockTrace.mockRejectedValueOnce(new ApiClientError('SCAN_NOT_FOUND', 'Scan not found'));

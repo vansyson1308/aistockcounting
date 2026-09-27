@@ -148,6 +148,15 @@ async def run_for_scan(
     finally:
         progress.finish(scan_key)
 
+    # What this run replaces (e.g. a legacy single-shot count), kept in the
+    # audit trail: a run that produces no count clears these on the scan.
+    before = {
+        "detected_count": scan.detected_count,
+        "final_count": scan.final_count,
+        "variance_count": scan.variance_count,
+        "variance_value": scan.variance_value,
+        "boxes": scan.boxes_json,
+    }
     apply_result(scan, result)
     if result.count is None:
         # This run produced no count (re-shot requested, or escalated before
@@ -183,6 +192,8 @@ async def run_for_scan(
             "run_id": str(run_id),
             "decision": result.action.value,
             "status": scan.status,
+            "count": result.count,
+            "before": before,
         },
     )
     summary = result.summary()
@@ -242,6 +253,7 @@ async def _close_open_discrepancy(
     for discrepancy in rows:
         discrepancy.status = "ignored"
         discrepancy.resolution_note = note
+        discrepancy.resolved_by = "trayagent"
         discrepancy.resolved_at = datetime.utcnow()
 
 

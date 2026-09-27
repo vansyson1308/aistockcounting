@@ -186,21 +186,31 @@ async def _expected_from_pos_or_tray(
     return None, None
 
 
+def _machine_count(scan: ScanSession) -> int | None:
+    """The count the detector or the agent produced for this photo, if any."""
+    if scan.agent_run_id is not None:
+        return scan.agent_count
+    if scan.boxes_json is None:  # deferred scan, never counted
+        return None
+    return scan.detected_count
+
+
 async def _upsert_discrepancy(
     db: AsyncSession,
     scan: ScanSession,
     *,
     unit_value: float | None,
 ) -> Discrepancy | None:
+    # A unit value given with this call wins and is kept on the scan, even when
+    # there is nothing to price yet (no POS figure): a later count uses it.
+    if unit_value is not None:
+        scan.unit_value = unit_value
     if scan.expected_count is None or scan.variance_count is None:
         return None
 
-    # Price the variance from the count that is current now. A unit value given
-    # with this call wins and is kept on the scan; otherwise the one stored when
-    # the scan was created is used. The previous variance_value is never
-    # reused: it belongs to an older count (agent count before a correction).
-    if unit_value is not None:
-        scan.unit_value = unit_value
+    # Price the variance from the count that is current now, with the stored
+    # unit value. The previous variance_value is never reused: it belongs to
+    # an older count (agent count before a correction).
     unit = scan.unit_value
     variance_value = (
         float(scan.variance_count) * float(unit) if unit is not None else None
@@ -504,12 +514,33 @@ async def review_scan(
             "APPROVAL_REQUIRED",
             "This scan was escalated by the agent; use POST /scans/{id}/approve.",
         )
+    if scan.status == "superseded" or (
+        scan.status == "needs_recapture" and scan.approved_by is not None
+    ):
+        # A rejected or retaken photo is closed: reviewing it would make it a
+        # "reviewed" scan again, and a comparison reference for the next scan.
+        raise api_error(
+            409,
+            "SCAN_CLOSED",
+            "This photo was rejected or retaken; review the retaken scan instead.",
+        )
 
     if payload.manual_count is not None:
         scan.manual_count = payload.manual_count
         scan.final_count = payload.manual_count
     else:
-        scan.final_count = scan.detected_count
+        machine = _machine_count(scan)
+        if machine is None:
+            # Nothing counted this photo (deferred scan never run, or the agent
+            # asked for a re-shot / escalated before counting): its stored
+            # final_count is a placeholder 0, never a count to record.
+            raise api_error(
+                422,
+                "MANUAL_COUNT_REQUIRED",
+                "No machine count exists for this scan; enter the counted quantity.",
+            )
+        scan.final_count = machine
+    scan.reviewed_at = datetime.utcnow()
     if payload.expected_count is not None:
         scan.expected_count = payload.expected_count
     scan.is_ai_correct = payload.is_ai_correct

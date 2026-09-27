@@ -132,7 +132,9 @@ export default function ScanPage() {
   const terminal = useMemo(() => terminalStep(steps), [steps]);
   const reason =
     agent?.instruction || agent?.reason || terminal?.reason || scan?.agent_reason || '';
-  const agentCount = agent?.count ?? scan?.agent_count ?? scan?.final_count ?? null;
+  // final_count is a placeholder 0 when the agent did not count: never show it
+  // as the agent's count.
+  const agentCount = agent?.count ?? scan?.agent_count ?? null;
   const busy = phase === 'uploading' || phase === 'running';
   const displaySrc = preview || buildImageUrl(scan?.image_path);
   const showManualReview =

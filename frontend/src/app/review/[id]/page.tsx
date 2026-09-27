@@ -94,7 +94,10 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   const regions = zoomRegions(zoom);
   const decision = scan?.agent_decision ?? terminal?.decision ?? null;
   const reason = terminal?.reason || scan?.agent_reason || '';
-  const agentCount = scan?.agent_count ?? scan?.final_count ?? null;
+  // null when the agent escalated before it counted (final_count is then a
+  // placeholder 0, not a count).
+  const agentCount = scan?.agent_count ?? null;
+  const humanDecided = !!scan?.approved_by || (scan?.manual_count ?? null) !== null;
   const originalSrc = buildImageUrl(scan?.image_path);
   const finalSrc = evidenceSrc(terminal?.evidence_url);
   const zoomSrc = evidenceSrc(zoom?.evidence_url);
@@ -205,7 +208,7 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
             }
           />
         </dl>
-        {scan.final_count !== agentCount && (
+        {scan.final_count !== agentCount && (agentCount !== null || humanDecided) && (
           <p className="text-sm">
             Final approved count: <strong className="tabular-nums">{scan.final_count}</strong>
           </p>

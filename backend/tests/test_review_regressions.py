@@ -152,16 +152,20 @@ async def test_agent_run_refused_after_human_review(client, agent_on) -> None:
 
 
 async def test_agent_run_refused_after_review_without_manual_count(
-    client, agent_on
+    client, agent_on, monkeypatch
 ) -> None:
-    body = await _scan(
-        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
-    )
+    from app.core.config import get_settings
+
+    # legacy single shot: the review confirms the machine count, no manual count
+    monkeypatch.setattr(get_settings(), "agent_enabled", False)
+    body = await _scan(client, make_tray(n_items=12, seed=11), expected=15)
     sid = body["scan"]["id"]
+    monkeypatch.setattr(get_settings(), "agent_enabled", True)
     r = await client.patch(
         f"/api/v1/scans/{sid}/review", json={"is_ai_correct": True, "notes": "ok"}
     )
     assert r.status_code == 200
+    assert r.json()["data"]["scan"]["status"] == "discrepancy_open"  # runnable
     rerun = await client.post(f"/api/v1/scans/{sid}/agent-run")
     assert rerun.status_code == 409
 
@@ -224,7 +228,7 @@ async def test_no_count_rerun_clears_stale_count_and_discrepancy(
     client, agent_on, monkeypatch
 ) -> None:
     from app.core.config import get_settings
-    from app.models.truth import Discrepancy, ScanSession
+    from app.models.truth import AuditEvent, Discrepancy, ScanSession
 
     settings = get_settings()
     monkeypatch.setattr(settings, "agent_enabled", False)  # legacy single shot
@@ -263,6 +267,23 @@ async def test_no_count_rerun_clears_stale_count_and_discrepancy(
             .all()
         )
     assert [d.status for d in rows] == ["ignored"]
+    assert rows[0].resolved_by == "trayagent"
+    # the count the re-run replaced is kept in the audit trail
+    async with _db() as db:
+        event = (
+            await db.execute(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id == sid,
+                    AuditEvent.action == "SCAN_AGENT_RUN",
+                )
+            )
+        ).scalar_one()
+    assert event.payload_json["count"] is None
+    assert event.payload_json["before"]["final_count"] == body["scan"]["final_count"]
+    assert (
+        event.payload_json["before"]["variance_count"] == body["scan"]["variance_count"]
+    )
+    assert len(event.payload_json["before"]["boxes"]) == body["scan"]["detected_count"]
 
 
 # 10. The stored object's key and ContentType follow the bytes, not the name.
@@ -275,3 +296,94 @@ def test_stored_image_type_follows_the_bytes() -> None:
     assert _image_ext(png, "photo.jpg") == ".png"
     assert _image_ext(b"????", "photo.png") == ".png"
     assert _image_ext(b"????", "photo.bmp") == ".jpg"
+
+
+# Round 2 of the review.
+
+
+# A review never records the placeholder 0 of a scan nothing counted.
+async def test_review_without_count_of_uncounted_scan_is_refused(
+    client, agent_on
+) -> None:
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=10, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"notes": "ok"})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "MANUAL_COUNT_REQUIRED"
+    ok = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    assert ok.status_code == 200
+    assert ok.json()["data"]["scan"]["final_count"] == 12
+
+
+async def test_review_without_count_keeps_the_machine_count(client, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "agent_enabled", False)
+    from app.services.storage import StorageService
+
+    monkeypatch.setattr(
+        StorageService,
+        "save_image_and_thumbnail",
+        lambda self, payload, name: ("uploads/x.jpg", "thumbnails/x.jpg"),
+    )
+    body = await _scan(client, make_tray(n_items=12, seed=11), expected=10)
+    counted = body["scan"]["detected_count"]
+    r = await client.patch(
+        f"/api/v1/scans/{body['scan']['id']}/review", json={"is_ai_correct": True}
+    )
+    assert r.status_code == 200
+    assert r.json()["data"]["scan"]["final_count"] == counted
+
+
+# A rejected photo stays closed: no review can turn it into a reference.
+async def test_rejected_scan_cannot_be_reviewed(client, agent_on) -> None:
+    body = await _tray_c(client)
+    sid = body["scan"]["id"]
+    await client.post(
+        f"/api/v1/scans/{sid}/approve",
+        json={"approver_id": "MGR-3", "decision": "reject"},
+    )
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 40})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "SCAN_CLOSED"
+
+
+# The review marker is a column, not an audit-log lookup.
+async def test_review_sets_the_marker_that_locks_the_agent_out(
+    client, agent_on
+) -> None:
+    from app.models.truth import ScanSession
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    async with _db() as db:
+        scan = (
+            await db.execute(
+                select(ScanSession).where(ScanSession.id == uuid.UUID(sid))
+            )
+        ).scalar_one()
+        assert scan.reviewed_at is not None
+        # even with the count cleared, the review still locks the scan
+        scan.manual_count = None
+        await db.commit()
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 409
+    assert "human already decided" in r.json()["error"]["message"]
+
+
+# A unit value sent before there is a POS figure is kept for later counts.
+async def test_unit_value_without_expected_count_is_kept(client, agent_on) -> None:
+    body = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    sid = body["scan"]["id"]
+    r = await client.patch(
+        f"/api/v1/scans/{sid}/review", json={"manual_count": 12, "unit_value": 3000}
+    )
+    assert r.json()["data"]["scan"]["unit_value"] == 3000
+    r = await client.patch(
+        f"/api/v1/scans/{sid}/review", json={"manual_count": 12, "expected_count": 10}
+    )
+    assert r.json()["data"]["scan"]["variance_value"] == 6000
