@@ -643,7 +643,7 @@ async def test_review_of_a_dead_claim_releases_it(client, agent_on) -> None:
     )
     r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 7})
     assert r.status_code == 200
-    assert r.json()["data"]["scan"]["status"] == "pending_review"
+    assert r.json()["data"]["scan"]["status"] == "reviewed"  # no POS: decided
     async with _db() as db:
         from app.models.truth import ScanSession
 
@@ -699,3 +699,48 @@ async def test_retake_survives_a_concurrent_change_to_its_parent(
     assert again["scan"]["attempt"] == 1
     trace = (await client.get(f"/api/v1/scans/{oid}/trace")).json()["data"]
     assert trace["scan"]["status"] == "reviewed"  # not superseded
+
+
+# Round 6 of the review.
+
+
+# With no POS figure, a human count decides the scan; a retake then leaves it.
+async def test_review_without_pos_decides_and_survives_a_retake(
+    client, agent_on
+) -> None:
+    parent = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    pid = parent["scan"]["id"]
+    await _set(pid, status="needs_recapture")
+    r = await client.patch(f"/api/v1/scans/{pid}/review", json={"manual_count": 12})
+    assert r.json()["data"]["scan"]["status"] == "reviewed"
+
+    await _set(pid, status="needs_recapture")  # even if it still said so
+    await _scan(
+        client, make_tray(n_items=12, seed=11), run_agent="false", parent_scan_id=pid
+    )
+    trace = (await client.get(f"/api/v1/scans/{pid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "needs_recapture"  # not superseded
+    assert trace["scan"]["final_count"] == 12
+
+
+# A discrepancy left open on a retaken photo closes; the photo stays closed.
+async def test_resolving_a_leftover_discrepancy_keeps_the_photo_closed(
+    client, agent_on
+) -> None:
+    from app.agent.service import previous_approved_scan
+    from app.models.truth import ScanSession
+
+    body = await _tray_c(client)
+    sid, did = body["scan"]["id"], body["discrepancy"]["id"]
+    await _set(sid, status="superseded")  # left open by a run before the fix
+    r = await client.post(
+        f"/api/v1/discrepancies/{did}/resolve",
+        json={"status": "resolved", "resolution_note": "ok", "resolved_by": "MGR-4"},
+    )
+    assert r.status_code == 200 and r.json()["data"]["status"] == "resolved"
+    trace = (await client.get(f"/api/v1/scans/{sid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "superseded"
+    async with _db() as db:
+        probe = ScanSession(id=uuid.uuid4(), tenant_key="default", tray_code="T-C")
+        ref = await previous_approved_scan(db, probe)
+        assert ref is None or str(ref.id) != sid

@@ -334,7 +334,11 @@ async def create_scan(
         # a concurrent change to the parent must not fail this upload.
         await db.execute(
             update(ScanSession)
-            .where(ScanSession.id == parent.id, ScanSession.status == "needs_recapture")
+            .where(
+                ScanSession.id == parent.id,
+                ScanSession.status == "needs_recapture",
+                ScanSession.reviewed_at.is_(None),  # a human count stands
+            )
             .values(
                 status="superseded",
                 updated_at=datetime.utcnow(),
@@ -591,6 +595,10 @@ async def review_scan(
         scan.variance_value = None
 
     discrepancy = await _upsert_discrepancy(db, scan, unit_value=payload.unit_value)
+    if scan.expected_count is None:
+        # No POS figure to reconcile: the human's count is the decision, so the
+        # scan no longer waits (for a re-shot, a review or the agent).
+        scan.status = "reviewed"
     await _record_event(
         db,
         tenant=tenant,
@@ -702,7 +710,10 @@ async def resolve_discrepancy(
             select(ScanSession).where(ScanSession.id == discrepancy.scan_id)
         )
     ).scalar_one_or_none()
-    if scan is not None:
+    if scan is not None and scan.status not in ("needs_recapture", "superseded"):
+        # A discrepancy left open on a rejected or retaken photo (by a run
+        # before the no-count fix) is closed, but the photo stays closed:
+        # it must not become a "reviewed" comparison reference.
         scan.status = "reviewed" if payload.status == "resolved" else "ignored"
 
     await _record_event(
