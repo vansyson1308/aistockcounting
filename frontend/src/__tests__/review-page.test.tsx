@@ -175,6 +175,7 @@ describe('ReviewPage', () => {
         detected_count: 37,
         final_count: 37,
         boxes_json: [],
+        processing_time_ms: 120,
         status: 'reviewed',
       },
       latest_run_id: null,
@@ -186,6 +187,30 @@ describe('ReviewPage', () => {
     render(<ReviewPage params={{ id: 'scan-9' }} />);
 
     expect(await screen.findByText(/final approved count/i)).toHaveTextContent('37');
+  });
+
+  it('shows no final count for a deferred scan whose agent run failed', async () => {
+    mockTrace.mockResolvedValueOnce({
+      scan: {
+        ...scan,
+        agent_count: null,
+        agent_decision: null,
+        detected_count: 0,
+        final_count: 0,
+        boxes_json: [],
+        processing_time_ms: null,
+        status: 'pending_review',
+      },
+      latest_run_id: null,
+      runs: [],
+      live: null,
+      steps: [],
+    });
+
+    render(<ReviewPage params={{ id: 'scan-9' }} />);
+
+    expect(await screen.findByText('Agent count')).toBeInTheDocument();
+    expect(screen.queryByText(/final approved count/i)).not.toBeInTheDocument();
   });
 
   it('shows an error when the scan cannot be loaded', async () => {

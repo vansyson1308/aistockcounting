@@ -143,6 +143,7 @@ async def agent_run(
             "The scan changed before the agent could start; reload it.",
         )
     await db.commit()
+    invalidate()  # cached views show the scan as being counted
     await db.refresh(scan)
     claim_version = scan.version
     try:
@@ -173,6 +174,7 @@ async def agent_run(
                 .execution_options(synchronize_session=False)
             )
             await db.commit()
+            invalidate()
         except Exception:
             logger.warning("could not release the agent claim on %s", scan_id)
         raise

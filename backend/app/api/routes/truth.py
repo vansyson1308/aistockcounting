@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.service import claim_is_fresh
@@ -329,8 +329,20 @@ async def create_scan(
         if parent is None:
             raise api_error(404, "PARENT_SCAN_NOT_FOUND", "Parent scan not found")
         attempt = (parent.attempt or 0) + 1
-        if parent.status == "needs_recapture":
-            parent.status = "superseded"
+        # Supersede the parent only if it still waits for this re-shot. A
+        # conditional update, not a version-checked write of the loaded row:
+        # a concurrent change to the parent must not fail this upload.
+        await db.execute(
+            update(ScanSession)
+            .where(ScanSession.id == parent.id, ScanSession.status == "needs_recapture")
+            .values(
+                status="superseded",
+                updated_at=datetime.utcnow(),
+                version=ScanSession.version + 1,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        db.expunge(parent)
 
     if settings.agent_enabled and run_agent:
         from app.agent.service import agent_payload, run_for_scan
@@ -562,6 +574,10 @@ async def review_scan(
             )
         scan.final_count = machine
     scan.reviewed_at = datetime.utcnow()
+    if scan.status == "agent_running":
+        # Only reachable once the claim went stale (the run died): the human
+        # review takes the scan over, so it must not stay "agent_running".
+        scan.status = "pending_review"
     if payload.expected_count is not None:
         scan.expected_count = payload.expected_count
     scan.is_ai_correct = payload.is_ai_correct
@@ -649,6 +665,15 @@ async def resolve_discrepancy(
     ).scalar_one_or_none()
     if discrepancy is None:
         raise api_error(404, "DISCREPANCY_NOT_FOUND", "Discrepancy not found")
+    if discrepancy.status != "open":
+        # Closed ones (resolved, or ignored by a rejection or a no-count
+        # re-run) stay closed: resolving again would reopen a rejected photo
+        # as a "reviewed" scan and a comparison reference.
+        raise api_error(
+            409,
+            "DISCREPANCY_CLOSED",
+            f"This discrepancy is already '{discrepancy.status}'.",
+        )
 
     gated_scan = (
         await db.execute(

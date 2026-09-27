@@ -87,6 +87,31 @@ async function selectPhotoAndStart() {
 }
 
 describe('ScanPage agent flow', () => {
+  it('shows the latest count when someone else saved the review first', async () => {
+    mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
+    mockRun.mockRejectedValueOnce(new ApiClientError('NETWORK', 'Connection lost'));
+    mockTrace.mockResolvedValue({
+      scan: makeScan({ status: 'reviewed', manual_count: 9, final_count: 9 }),
+      latest_run_id: null,
+      steps: [],
+      runs: [],
+      live: null,
+    });
+    mockReview.mockRejectedValueOnce(new ApiClientError('SCAN_CHANGED', 'Scan changed'));
+
+    render(<ScanPage />);
+    await selectPhotoAndStart();
+    const quantity = await screen.findByLabelText('Recounted quantity');
+    fireEvent.change(quantity, { target: { value: '11' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/someone else updated this scan/i);
+    expect(screen.getByLabelText('Recounted quantity')).toHaveValue(9);
+    expect(mockReview).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the agent result when a manual review finds the agent still running', async () => {
     mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
     mockRun.mockRejectedValueOnce(new ApiClientError('NETWORK', 'Connection lost'));

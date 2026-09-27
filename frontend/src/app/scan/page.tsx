@@ -314,7 +314,26 @@ export default function ScanPage() {
           announceOutcome(recovered);
           return;
         }
-        setError('TrayAgent is still counting this tray. Wait a few seconds, then save again.');
+        if (err.code === 'AGENT_RUNNING') {
+          setError('TrayAgent is still counting this tray. Wait a few seconds, then save again.');
+          return;
+        }
+        // Someone else saved this scan first: show their numbers before this
+        // person decides whether to save over them.
+        try {
+          const latest = await getTrace(scan.id);
+          setResult((prev) => ({
+            scan: latest.scan,
+            discrepancy: prev?.discrepancy ?? null,
+            agent: prev?.agent ?? null,
+          }));
+          setManualCount(latest.scan.manual_count != null ? String(latest.scan.manual_count) : '');
+        } catch {
+          // keep the form as it is; the message below still applies
+        }
+        setError(
+          'Someone else updated this scan while you were reviewing it. The latest count is shown; check it before saving again.'
+        );
         return;
       }
       setError(errorMessage(err, 'Could not save the review.'));

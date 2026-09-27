@@ -99,9 +99,11 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   const agentCount = scan?.agent_count ?? null;
   // A count other than the agent's: a human's (review or approval correction;
   // a rejection sets approved_by but records no count) or a single-shot
-  // detector count from before the agent (no agent decision, boxes stored).
+  // detector count from before the agent (no agent decision, but a detector
+  // pass ran, so it has a processing time; the API always sends boxes_json).
   const otherCount =
-    (scan?.manual_count ?? null) !== null || (!scan?.agent_decision && scan?.boxes_json != null);
+    (scan?.manual_count ?? null) !== null ||
+    (!scan?.agent_decision && (scan?.processing_time_ms ?? null) !== null);
   const originalSrc = buildImageUrl(scan?.image_path);
   const finalSrc = evidenceSrc(terminal?.evidence_url);
   const zoomSrc = evidenceSrc(zoom?.evidence_url);

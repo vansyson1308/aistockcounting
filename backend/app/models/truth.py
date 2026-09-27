@@ -114,8 +114,13 @@ class ScanSession(Base):
     # Set by PATCH /review: a human's count is final, the agent never re-runs over it.
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+    # Set by the app in UTC (not the database's now(), whose time zone is the
+    # server's): the agent claim's freshness is judged against utcnow().
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(), server_default=func.now(), onupdate=func.now()
+        DateTime(),
+        server_default=func.now(),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
     # Optimistic lock: every ORM update checks and bumps it, so a write based
     # on a stale read (a review racing an agent run, or two runs) fails with

@@ -627,3 +627,75 @@ async def test_rejection_records_who_and_when(client, agent_on) -> None:
     d = r.json()["data"]["discrepancy"]
     assert d["status"] == "ignored"
     assert d["resolved_by"] == "MGR-3" and d["resolved_at"] is not None
+
+
+# Round 5 of the review.
+
+
+# A review that takes over a dead claim moves the scan out of agent_running.
+async def test_review_of_a_dead_claim_releases_it(client, agent_on) -> None:
+    body = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    sid = body["scan"]["id"]
+    await _set(
+        sid,
+        status="agent_running",
+        updated_at=datetime.utcnow() - timedelta(minutes=10),
+    )
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 7})
+    assert r.status_code == 200
+    assert r.json()["data"]["scan"]["status"] == "pending_review"
+    async with _db() as db:
+        from app.models.truth import ScanSession
+
+        scan = await db.get(ScanSession, uuid.UUID(sid))
+        # updated_at is app-side UTC, the clock the claim is judged against
+        assert abs((scan.updated_at - datetime.utcnow()).total_seconds()) < 60
+
+
+# A closed discrepancy (here: a rejection) cannot be resolved again.
+async def test_closed_discrepancy_cannot_be_resolved(client, agent_on) -> None:
+    body = await _tray_c(client)
+    did = body["discrepancy"]["id"]
+    await client.post(
+        f"/api/v1/scans/{body['scan']['id']}/approve",
+        json={"approver_id": "MGR-3", "decision": "reject"},
+    )
+    r = await client.post(
+        f"/api/v1/discrepancies/{did}/resolve",
+        json={"status": "resolved", "resolution_note": "ok", "resolved_by": "MGR-4"},
+    )
+    assert r.status_code == 409 and r.json()["error"]["code"] == "DISCREPANCY_CLOSED"
+    trace = (await client.get(f"/api/v1/scans/{body['scan']['id']}/trace")).json()
+    assert trace["data"]["scan"]["status"] == "needs_recapture"
+
+
+# A retake does not fail because its parent changed meanwhile.
+async def test_retake_survives_a_concurrent_change_to_its_parent(
+    client, agent_on
+) -> None:
+    parent = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    pid = parent["scan"]["id"]
+    await _set(pid, status="needs_recapture")
+    retake = await _scan(
+        client,
+        make_tray(n_items=12, seed=11),
+        run_agent="false",
+        parent_scan_id=pid,
+    )
+    assert retake["scan"]["parent_scan_id"] == pid
+    trace = (await client.get(f"/api/v1/scans/{pid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "superseded"
+
+    # the parent was reviewed by someone else before this retake arrived
+    other = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    oid = other["scan"]["id"]
+    await _set(oid, status="reviewed", manual_count=12, final_count=12)
+    again = await _scan(
+        client,
+        make_tray(n_items=12, seed=11),
+        run_agent="false",
+        parent_scan_id=oid,
+    )
+    assert again["scan"]["attempt"] == 1
+    trace = (await client.get(f"/api/v1/scans/{oid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "reviewed"  # not superseded
