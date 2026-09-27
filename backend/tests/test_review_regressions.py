@@ -387,3 +387,139 @@ async def test_unit_value_without_expected_count_is_kept(client, agent_on) -> No
         f"/api/v1/scans/{sid}/review", json={"manual_count": 12, "expected_count": 10}
     )
     assert r.json()["data"]["scan"]["variance_value"] == 6000
+
+
+# Round 3 of the review.
+
+
+async def _set(sid: str, **values) -> None:
+    from app.models.truth import ScanSession
+
+    async with _db() as db:
+        await db.execute(
+            update(ScanSession).where(ScanSession.id == uuid.UUID(sid)).values(**values)
+        )
+        await db.commit()
+
+
+# A review cannot land while the agent is counting the same scan.
+async def test_review_refused_while_the_agent_runs(client, agent_on) -> None:
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    await _set(sid, status="agent_running")
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "AGENT_RUNNING"
+
+
+# The claim is a compare-and-set: a review that committed after the check wins.
+async def test_agent_claim_loses_to_a_review_committed_first(
+    client, agent_on, monkeypatch
+) -> None:
+    import app.api.routes.agent as agent_routes
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    await _set(sid, status="pending_review")  # runnable status, but reviewed
+    # the in-memory check misses the review (as if it committed right after)
+    monkeypatch.setattr(agent_routes, "_human_reviewed", lambda scan: False)
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    assert r.status_code == 409
+    assert "changed before the agent could start" in r.json()["error"]["message"]
+    trace = (await client.get(f"/api/v1/scans/{sid}/trace")).json()["data"]
+    assert trace["scan"]["final_count"] == 12
+
+
+# A run that fails releases the claim, so the scan can still be reviewed.
+async def test_failed_agent_run_releases_the_claim(
+    client, agent_on, monkeypatch
+) -> None:
+    import app.api.routes.agent as agent_routes
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("detector crashed")
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    monkeypatch.setattr(agent_routes, "run_for_scan", boom)
+    try:
+        await client.post(f"/api/v1/scans/{sid}/agent-run")
+    except RuntimeError:
+        pass  # ASGITransport re-raises the app's exception
+    trace = (await client.get(f"/api/v1/scans/{sid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "pending_review"
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    assert r.status_code == 200
+
+
+# A later review that only adds figures keeps the human's corrected count.
+async def test_review_keeps_an_earlier_human_count(client, agent_on) -> None:
+    body = await _tray_c(client)  # agent 39 vs POS 40
+    sid = body["scan"]["id"]
+    await client.post(
+        f"/api/v1/scans/{sid}/approve",
+        json={"approver_id": "MGR-2", "decision": "correct", "corrected_count": 37},
+    )
+    r = await client.patch(
+        f"/api/v1/scans/{sid}/review", json={"expected_count": 38, "notes": "POS"}
+    )
+    scan = r.json()["data"]["scan"]
+    assert scan["final_count"] == 37 and scan["variance_count"] == -1
+
+
+# No stored unit value: price from the tray master, like a new scan.
+async def test_missing_unit_value_falls_back_to_the_tray_master(
+    client, agent_on
+) -> None:
+    from app.models.truth import Tray
+
+    body = await _scan(
+        client, make_tray(n_items=12, seed=11), expected=13, run_agent="false"
+    )
+    sid = body["scan"]["id"]
+    async with _db() as db:
+        db.add(Tray(tenant_key="default", tray_code="T-A", unit_value=4000))
+        await db.commit()
+    await _set(sid, unit_value=None)  # e.g. a scan from before migration 0005
+    r = await client.patch(f"/api/v1/scans/{sid}/review", json={"manual_count": 12})
+    data = r.json()["data"]
+    assert data["scan"]["unit_value"] == 4000
+    assert data["discrepancy"]["variance_value"] == -4000
+
+
+# An approver's unit value is kept even when there is no POS figure yet.
+async def test_approval_keeps_unit_value_without_expected_count(
+    client, agent_on
+) -> None:
+    body = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    sid = body["scan"]["id"]
+    await _set(sid, status="awaiting_approval", agent_count=12)
+    r = await client.post(
+        f"/api/v1/scans/{sid}/approve",
+        json={
+            "approver_id": "MGR-1",
+            "decision": "correct",
+            "corrected_count": 11,
+            "unit_value": 5000,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["data"]["scan"]["unit_value"] == 5000
+
+
+# A rejection closes the discrepancy with who and when.
+async def test_rejection_records_who_and_when(client, agent_on) -> None:
+    body = await _tray_c(client)
+    r = await client.post(
+        f"/api/v1/scans/{body['scan']['id']}/approve",
+        json={"approver_id": "MGR-3", "decision": "reject"},
+    )
+    d = r.json()["data"]["discrepancy"]
+    assert d["status"] == "ignored"
+    assert d["resolved_by"] == "MGR-3" and d["resolved_at"] is not None

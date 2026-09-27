@@ -5,11 +5,16 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import progress
-from app.agent.service import agent_payload, mark_approved, run_for_scan
+from app.agent.service import (
+    agent_payload,
+    close_open_discrepancies,
+    mark_approved,
+    run_for_scan,
+)
 from app.api.routes.truth import (
     _discrepancy_payload,
     _record_event,
@@ -104,9 +109,44 @@ async def agent_run(
             "AGENT_RUN_NOT_ALLOWED",
             "A human already decided this scan's count; the agent cannot re-run it.",
         )
-    result = await run_for_scan(
-        db, scan, detector=inference.detector(), storage=storage
+    # Claim the scan before the (slow) run: while it is agent_running, a
+    # review is refused, so a human count cannot be overwritten by a run that
+    # started before it. The claim is a compare-and-set on the state checked
+    # above, so a review that committed in between wins.
+    previous_status = scan.status
+    claimed = await db.execute(
+        update(ScanSession)
+        .where(
+            ScanSession.id == scan.id,
+            ScanSession.status == previous_status,
+            ScanSession.approved_by.is_(None),
+            ScanSession.manual_count.is_(None),
+            ScanSession.reviewed_at.is_(None),
+        )
+        .values(status="agent_running")
     )
+    if claimed.rowcount != 1:
+        await db.rollback()
+        raise api_error(
+            409,
+            "AGENT_RUN_NOT_ALLOWED",
+            "The scan changed before the agent could start; reload it.",
+        )
+    await db.commit()
+    try:
+        result = await run_for_scan(
+            db, scan, detector=inference.detector(), storage=storage
+        )
+    except Exception:
+        # Release the claim so the scan can be reviewed by hand or re-run.
+        await db.rollback()
+        await db.execute(
+            update(ScanSession)
+            .where(ScanSession.id == scan_id, ScanSession.status == "agent_running")
+            .values(status=previous_status)
+        )
+        await db.commit()
+        raise
     await db.commit()
     await db.refresh(scan)
     discrepancy = await _open_discrepancy(db, scan.id)
@@ -211,13 +251,13 @@ async def approve_scan(
         scan.status = "needs_recapture"
         scan.notes = payload.note
         mark_approved(scan, payload.approver_id)
-        discrepancy = await _open_discrepancy(db, scan.id)
-        if discrepancy is not None:
-            discrepancy.status = "ignored"
-            discrepancy.resolution_note = (
-                "Agent count rejected by a human; recount required."
-            )
-            discrepancy.resolved_by = payload.approver_id
+        closed = await close_open_discrepancies(
+            db,
+            scan,
+            "Agent count rejected by a human; recount required.",
+            by=payload.approver_id,
+        )
+        discrepancy = closed[0] if closed else None
     else:
         count = (
             payload.corrected_count
@@ -237,6 +277,8 @@ async def approve_scan(
             else None
         )
         mark_approved(scan, payload.approver_id)
+        if payload.unit_value is not None:
+            scan.unit_value = payload.unit_value  # kept even with no POS figure yet
         if scan.expected_count is None:
             scan.status = "reviewed"
             discrepancy = None

@@ -210,7 +210,17 @@ async def _upsert_discrepancy(
 
     # Price the variance from the count that is current now, with the stored
     # unit value. The previous variance_value is never reused: it belongs to
-    # an older count (agent count before a correction).
+    # an older count (agent count before a correction). A scan with no stored
+    # unit value (e.g. created before it was stored) takes the POS snapshot or
+    # tray master value, as a new scan would; with neither, the money value is
+    # unknown rather than stale.
+    if scan.unit_value is None:
+        _, scan.unit_value = await _expected_from_pos_or_tray(
+            db,
+            tenant=scan.tenant_key,
+            branch_code=scan.branch_code,
+            tray_code=scan.tray_code,
+        )
     unit = scan.unit_value
     variance_value = (
         float(scan.variance_count) * float(unit) if unit is not None else None
@@ -514,6 +524,12 @@ async def review_scan(
             "APPROVAL_REQUIRED",
             "This scan was escalated by the agent; use POST /scans/{id}/approve.",
         )
+    if scan.status == "agent_running":
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is counting this scan; wait for it to finish.",
+        )
     if scan.status == "superseded" or (
         scan.status == "needs_recapture" and scan.approved_by is not None
     ):
@@ -528,6 +544,10 @@ async def review_scan(
     if payload.manual_count is not None:
         scan.manual_count = payload.manual_count
         scan.final_count = payload.manual_count
+    elif scan.manual_count is not None:
+        # An earlier human count (review or approval correction) stands; this
+        # review only adds a POS figure, a unit value or notes.
+        scan.final_count = scan.manual_count
     else:
         machine = _machine_count(scan)
         if machine is None:

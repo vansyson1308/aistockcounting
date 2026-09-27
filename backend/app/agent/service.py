@@ -148,21 +148,24 @@ async def run_for_scan(
     finally:
         progress.finish(scan_key)
 
-    # What this run replaces (e.g. a legacy single-shot count), kept in the
-    # audit trail: a run that produces no count clears these on the scan.
+    # What this run replaces, kept in the audit trail: a run that produces no
+    # count clears these on the scan. An earlier agent run's boxes are already
+    # in agent_steps (by run id); a legacy single-shot count's are not.
     before = {
+        "agent_run_id": str(scan.agent_run_id) if scan.agent_run_id else None,
         "detected_count": scan.detected_count,
         "final_count": scan.final_count,
         "variance_count": scan.variance_count,
         "variance_value": scan.variance_value,
-        "boxes": scan.boxes_json,
     }
+    if scan.agent_run_id is None and scan.boxes_json:
+        before["boxes"] = scan.boxes_json
     apply_result(scan, result)
     if result.count is None:
         # This run produced no count (re-shot requested, or escalated before
         # counting). A count and an open discrepancy left by an earlier run on
         # the same scan no longer describe it.
-        await _close_open_discrepancy(
+        await close_open_discrepancies(
             db, scan, "Superseded: a new agent run produced no count."
         )
     if result.action == Action.REQUEST_RECAPTURE:
@@ -240,21 +243,22 @@ def apply_result(scan: ScanSession, result: AgentResult) -> None:
         scan.variance_count = result.count - scan.expected_count
 
 
-async def _close_open_discrepancy(
-    db: AsyncSession, scan: ScanSession, note: str
-) -> None:
-    rows = (
-        await db.execute(
-            select(Discrepancy).where(
-                Discrepancy.scan_id == scan.id, Discrepancy.status == "open"
-            )
+async def close_open_discrepancies(
+    db: AsyncSession, scan: ScanSession, note: str, *, by: str = "trayagent"
+) -> list[Discrepancy]:
+    """Close the scan's open discrepancies as 'ignored' (no longer valid)."""
+    result = await db.execute(
+        select(Discrepancy).where(
+            Discrepancy.scan_id == scan.id, Discrepancy.status == "open"
         )
-    ).scalars()
+    )
+    rows = list(result.scalars())
     for discrepancy in rows:
         discrepancy.status = "ignored"
         discrepancy.resolution_note = note
-        discrepancy.resolved_by = "trayagent"
+        discrepancy.resolved_by = by
         discrepancy.resolved_at = datetime.utcnow()
+    return rows
 
 
 def agent_payload(

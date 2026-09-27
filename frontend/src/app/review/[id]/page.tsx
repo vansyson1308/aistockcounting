@@ -97,7 +97,9 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   // null when the agent escalated before it counted (final_count is then a
   // placeholder 0, not a count).
   const agentCount = scan?.agent_count ?? null;
-  const humanDecided = !!scan?.approved_by || (scan?.manual_count ?? null) !== null;
+  // A human count exists only after a review or an approval correction; a
+  // rejection sets approved_by but records no count.
+  const humanDecided = (scan?.manual_count ?? null) !== null;
   const originalSrc = buildImageUrl(scan?.image_path);
   const finalSrc = evidenceSrc(terminal?.evidence_url);
   const zoomSrc = evidenceSrc(zoom?.evidence_url);

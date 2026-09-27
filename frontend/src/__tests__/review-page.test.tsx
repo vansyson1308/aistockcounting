@@ -144,6 +144,28 @@ describe('ReviewPage', () => {
     expect(screen.getByRole('button', { name: /no agent count to approve/i })).toBeDisabled();
   });
 
+  it('shows no final count for a rejected scan the agent never counted', async () => {
+    mockTrace.mockResolvedValueOnce({
+      scan: {
+        ...scan,
+        agent_count: null,
+        final_count: 0,
+        variance_count: null,
+        status: 'needs_recapture',
+        approved_by: 'MGR-1',
+      },
+      latest_run_id: 'r1',
+      runs: [{ run_id: 'r1', steps: [] }],
+      live: null,
+      steps: [],
+    });
+
+    render(<ReviewPage params={{ id: 'scan-9' }} />);
+
+    expect(await screen.findByText('Agent count')).toBeInTheDocument();
+    expect(screen.queryByText(/final approved count/i)).not.toBeInTheDocument();
+  });
+
   it('shows an error when the scan cannot be loaded', async () => {
     const { ApiClientError } = await import('@/lib/api');
     mockTrace.mockRejectedValueOnce(new ApiClientError('SCAN_NOT_FOUND', 'Scan not found'));

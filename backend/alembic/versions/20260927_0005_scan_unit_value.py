@@ -33,7 +33,9 @@ def upgrade() -> None:
     # that ratio is still the one priced at creation. Before this revision a
     # review, an approval or an agent re-run changed variance_count without
     # repricing, so those rows stay NULL rather than get a wrong (or negative)
-    # unit value.
+    # unit value; pricing then falls back to the POS / tray master value.
+    # A single-shot scan records its variance in SCAN_CREATED: if an agent
+    # run changed it since, the ratio is stale even with one run on record.
     op.execute(
         "UPDATE scan_sessions SET unit_value = variance_value / variance_count "
         "WHERE variance_value IS NOT NULL AND variance_count IS NOT NULL "
@@ -42,7 +44,13 @@ def upgrade() -> None:
         "AND manual_count IS NULL AND approved_by IS NULL "
         "AND reviewed_at IS NULL "
         "AND (SELECT COUNT(DISTINCT s.run_id) FROM agent_steps s "
-        "WHERE s.scan_id = scan_sessions.id) <= 1"
+        "WHERE s.scan_id = scan_sessions.id) <= 1 "
+        "AND NOT EXISTS (SELECT 1 FROM audit_events c "
+        "WHERE c.entity_type = 'scan_session' AND c.action = 'SCAN_CREATED' "
+        "AND c.entity_id = CAST(scan_sessions.id AS VARCHAR(64)) "
+        "AND (c.payload_json ->> 'variance_count') IS NOT NULL "
+        "AND (c.payload_json ->> 'variance_count') "
+        "<> CAST(scan_sessions.variance_count AS VARCHAR(16)))"
     )
 
 

@@ -89,6 +89,7 @@ def test_scan_unit_value_migration_backfills(monkeypatch) -> None:
     # only rows whose variance was never changed after it was priced
     assert "manual_count IS NULL AND approved_by IS NULL" in sql
     assert "reviewed_at IS NULL" in sql and "COUNT(DISTINCT s.run_id)" in sql
+    assert "payload_json ->> 'variance_count'" in sql  # single shot, re-run since
     assert {"unit_value", "reviewed_at"} <= {
         c.name for c in ScanSession.__table__.columns
     }
