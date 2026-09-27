@@ -336,7 +336,9 @@ async def create_scan(
             update(ScanSession)
             .where(
                 ScanSession.id == parent.id,
-                ScanSession.status == "needs_recapture",
+                # agent_running: a re-run of the parent is in flight; its
+                # write then fails on the version and the retake stands
+                ScanSession.status.in_(("needs_recapture", "agent_running")),
                 ScanSession.reviewed_at.is_(None),  # a human count stands
             )
             .values(

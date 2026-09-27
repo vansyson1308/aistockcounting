@@ -293,6 +293,7 @@ export default function ScanPage() {
       const recovered = await recoverFromTrace(scan.id);
       if (recovered) {
         setError('');
+        setRetake(null); // the lost run's scan is the latest in the chain
         announceOutcome(recovered);
         return;
       }
@@ -324,6 +325,7 @@ export default function ScanPage() {
         const recovered = await recoverFromTrace(scan.id);
         if (recovered) {
           setError('');
+          setRetake(null);
           announceOutcome(recovered);
           return;
         }

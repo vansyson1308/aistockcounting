@@ -43,6 +43,10 @@ logger = logging.getLogger("app")
 GATED_STATUSES = {"awaiting_approval"}
 # A human rejected the count (or the re-shot that followed replaced it).
 REJECTED_STATUSES = ("needs_recapture", "superseded")
+# Quality flags that make a photo unfit as a comparison reference, and how
+# many recent approved scans to look through for one that is fit.
+UNFIT_REFERENCE_FLAGS = frozenset({"blurry", "tray_not_found"})
+REFERENCE_CANDIDATES = 10
 # An agent_running claim older than this is from a run that died (worker
 # killed, restart): the scan may be re-run or reviewed by hand again. Runs
 # are capped far below it (policy time budget).
@@ -76,7 +80,9 @@ async def previous_approved_scan(
     (the scan goes back to ``needs_recapture``, then ``superseded``), so those
     statuses are excluded: a rejected photo is not a reference. Nor is a
     photo the agent asked to retake, even if a human then counted the tray
-    by hand: the count may stand, the image is still unusable.
+    by hand, or one it counted only because the re-shot cap was reached
+    (still blurry or tray out of frame): the count may stand, the image is
+    not fit to compare against.
     """
     q = (
         select(ScanSession)
@@ -97,11 +103,14 @@ async def previous_approved_scan(
             ),
         )
         .order_by(desc(ScanSession.created_at))
-        .limit(1)
+        .limit(REFERENCE_CANDIDATES)
     )
     if scan.created_at is not None:
         q = q.where(ScanSession.created_at <= scan.created_at)
-    return (await db.execute(q)).scalar_one_or_none()
+    for candidate in (await db.execute(q)).scalars():
+        if not UNFIT_REFERENCE_FLAGS & set(candidate.quality_flags or ()):
+            return candidate
+    return None
 
 
 def policy_from_settings() -> PolicyConfig:
@@ -196,6 +205,13 @@ async def run_for_scan(
             )  # variance 0 -> reviewed
         else:
             scan.status = "pending_review"
+    elif scan.variance_count == 0:
+        # Escalated although the count matches POS: an open discrepancy from
+        # an earlier count stays open until the approver decides (approve
+        # resolves it, reject closes it); _upsert_discrepancy would
+        # auto-resolve it on a count nobody accepted yet.
+        scan.variance_value = 0.0
+        scan.status = "awaiting_approval"
     else:
         await _upsert_discrepancy(db, scan, unit_value=unit_value)
         scan.status = "awaiting_approval"

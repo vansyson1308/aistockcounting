@@ -784,3 +784,79 @@ async def test_retake_requested_photo_is_not_a_reference(client, agent_on) -> No
         probe = ScanSession(id=uuid.uuid4(), tenant_key="default", tray_code="T-C")
         ref = await previous_approved_scan(db, probe)
         assert ref is not None and str(ref.id) != sid
+
+
+# Round 8 of the review.
+
+
+# An escalated count equal to POS does not resolve the old discrepancy: the
+# approver does (approve resolves it, reject closes it).
+async def test_escalated_zero_variance_leaves_the_discrepancy_to_the_approver(
+    client, agent_on, monkeypatch
+) -> None:
+    import dataclasses
+
+    import app.agent.service as service
+    from app.agent.policy import Action as PolicyAction
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "agent_enabled", False)
+    body = await _scan(client, make_tray(n_items=12, seed=11), expected=15)
+    sid = body["scan"]["id"]
+    counted = body["scan"]["detected_count"]
+    assert body["discrepancy"]["status"] == "open"
+    monkeypatch.setattr(get_settings(), "agent_enabled", True)
+    await _set(sid, expected_count=counted)  # POS now matches the photo
+
+    real = service.run_agent
+
+    def escalating(*args, **kwargs):
+        result = real(*args, **kwargs)
+        return dataclasses.replace(
+            result, action=PolicyAction.ESCALATE, code="low_confidence"
+        )
+
+    monkeypatch.setattr(service, "run_agent", escalating)
+    r = await client.post(f"/api/v1/scans/{sid}/agent-run")
+    data = r.json()["data"]
+    assert data["scan"]["status"] == "awaiting_approval"
+    assert data["scan"]["variance_count"] == 0
+    assert data["discrepancy"]["status"] == "open"  # not auto-resolved
+
+    r = await client.post(
+        f"/api/v1/scans/{sid}/approve",
+        json={"approver_id": "MGR-1", "decision": "reject"},
+    )
+    assert r.json()["data"]["discrepancy"]["status"] == "ignored"
+
+
+# A blurry or out-of-frame photo counted at the re-shot cap is not a reference.
+async def test_unfit_photo_is_skipped_as_a_reference(client, agent_on) -> None:
+    from app.agent.service import previous_approved_scan
+    from app.models.truth import ScanSession
+
+    body = await _tray_c(client)
+    sid = body["scan"]["id"]
+    await _set(
+        sid,
+        status="reviewed",
+        approved_by="MGR-1",
+        quality_flags=["blurry"],
+        created_at=datetime.utcnow() + timedelta(minutes=5),
+    )
+    async with _db() as db:
+        probe = ScanSession(id=uuid.uuid4(), tenant_key="default", tray_code="T-C")
+        ref = await previous_approved_scan(db, probe)
+        assert ref is not None and str(ref.id) != sid
+
+
+# A retake uploaded while an agent re-run holds the parent supersedes it.
+async def test_retake_supersedes_a_parent_being_re_run(client, agent_on) -> None:
+    parent = await _scan(client, make_tray(n_items=12, seed=11), run_agent="false")
+    pid = parent["scan"]["id"]
+    await _set(pid, status="agent_running", updated_at=datetime.utcnow())
+    await _scan(
+        client, make_tray(n_items=12, seed=11), run_agent="false", parent_scan_id=pid
+    )
+    trace = (await client.get(f"/api/v1/scans/{pid}/trace")).json()["data"]
+    assert trace["scan"]["status"] == "superseded"

@@ -186,6 +186,16 @@ describe('ApprovalPanel', () => {
     expect(screen.queryByLabelText(/approver id/i)).not.toBeInTheDocument();
   });
 
+  it('shows no final count for a rejected count', () => {
+    render(
+      <ApprovalPanel
+        scan={makeScan({ status: 'needs_recapture', agent_count: 12, approved_by: 'MGR-1' })}
+      />
+    );
+
+    expect(screen.getByText('Final count').nextElementSibling).toHaveTextContent('—');
+  });
+
   it('shows no final count for a photo nothing counted', () => {
     render(
       <ApprovalPanel
