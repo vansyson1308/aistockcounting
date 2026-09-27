@@ -47,12 +47,21 @@ class ScanSessionData(BaseModel):
     status: str
     model_version: str | None = None
     processing_time_ms: int | None = None
+    parent_scan_id: UUID | None = None
+    attempt: int = 0
+    agent_run_id: UUID | None = None
+    agent_decision: str | None = None
+    agent_count: int | None = None
+    agent_reason: str | None = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
     created_at: datetime
 
 
 class ScanCreateResponseData(BaseModel):
     scan: ScanSessionData
     discrepancy: DiscrepancyData | None = None
+    agent: dict | None = None
 
 
 class ScanCreateResponse(BaseModel):

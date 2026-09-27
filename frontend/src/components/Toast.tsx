@@ -26,14 +26,11 @@ export function GlobalToast() {
 
   return (
     <div
+      role="status"
       className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${variantStyles[variant]}`}
     >
       <span>{message}</span>
-      <button
-        onClick={hide}
-        className="ml-3 text-white/80 hover:text-white"
-        aria-label="Đóng"
-      >
+      <button onClick={hide} className="ml-3 text-white/80 hover:text-white" aria-label="Close">
         ✕
       </button>
     </div>

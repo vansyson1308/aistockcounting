@@ -29,6 +29,22 @@ OpenCV (Apache-2.0), SAHI (MIT), supervision (MIT),
 roboflow/trackers (Apache-2.0). Each must pass the dependency policy
 before being added to any manifest.
 
+## TrayAgent runtime (OpenCV AI Competition 2026; verified 2026-09-25)
+
+| Component | License | Use |
+|---|---|---|
+| OpenCV 5.0.0 (`opencv-python-headless==5.0.0.93`) | Apache-2.0 | all image analysis, DNN inference (`cv2.dnn`) |
+| YuNet face detector (`backend/app/assets/face_detection_yunet_2023mar.onnx`, opencv_zoo, sha256 `8f2383e4…2fa4`) | MIT | face blurring before storage (vendored) |
+| YOLOX (Megvii-BaseDetection/YOLOX) | Apache-2.0 | detector architecture and training code (training only; runtime loads the exported ONNX through OpenCV) |
+| FastAPI, Starlette, Pydantic | MIT | API |
+| SQLAlchemy, Alembic | MIT | persistence |
+| boto3 / botocore | Apache-2.0 | S3, CloudWatch, Bedrock clients |
+| numpy | BSD-3-Clause | numerics |
+| onnx (tests only) | Apache-2.0 | building tiny synthetic graphs for DNN decode tests |
+
+Removed from the runtime: `ultralytics` (AGPL-3.0) and `onnxruntime`. OpenCV 5 DNN
+serves the model instead.
+
 ## Datasets (not redistributed in this repository)
 
 | Dataset | Terms | Permitted use here |

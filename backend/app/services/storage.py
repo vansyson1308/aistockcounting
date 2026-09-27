@@ -14,20 +14,43 @@ logger = logging.getLogger(__name__)
 
 
 class StorageService:
+    """S3-API object storage: MinIO locally, Amazon S3 on AWS.
+
+    On AWS (``STORAGE_BACKEND=s3``) credentials come from the default boto3
+    chain (the EC2 instance role), and the bucket is created by CDK with its
+    lifecycle policy, so it is never auto-created here.
+    """
+
     def __init__(self) -> None:
         s = get_settings()
-        self.bucket = s.minio_bucket
-        self.client = boto3.client(
-            "s3",
-            endpoint_url=f"{'https' if s.minio_secure else 'http'}://{s.minio_endpoint}",
-            aws_access_key_id=s.minio_access_key,
-            aws_secret_access_key=s.minio_secret_key,
-        )
+        self.backend = s.storage_backend
+        if s.storage_backend == "s3":
+            self.bucket = s.s3_bucket or s.minio_bucket
+            self.client = boto3.client("s3", region_name=s.aws_region)
+        else:
+            self.bucket = s.minio_bucket
+            self.client = boto3.client(
+                "s3",
+                endpoint_url=f"{'https' if s.minio_secure else 'http'}://{s.minio_endpoint}",
+                aws_access_key_id=s.minio_access_key,
+                aws_secret_access_key=s.minio_secret_key,
+            )
 
     def ensure_bucket(self) -> None:
+        if self.backend == "s3":
+            self.client.head_bucket(Bucket=self.bucket)
+            return
         buckets = [b["Name"] for b in self.client.list_buckets().get("Buckets", [])]
         if self.bucket not in buckets:
             self.client.create_bucket(Bucket=self.bucket)
+
+    def put_bytes(self, key: str, body: bytes, content_type: str = "image/jpeg") -> str:
+        self._put_with_retry(key, body, content_type)
+        return key
+
+    def get_bytes(self, key: str) -> bytes:
+        obj = self.client.get_object(Bucket=self.bucket, Key=key)
+        return obj["Body"].read()
 
     def _put_with_retry(
         self, key: str, body: bytes, content_type: str, retries: int = 3

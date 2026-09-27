@@ -1,17 +1,18 @@
+import cv2
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import generate_latest
 from pydantic import ValidationError
 
-from app.api.routes import count, export, history, save, stats, truth
+from app.api.routes import agent, count, export, history, save, stats, truth
 from app.core.auth import enforce_optional_auth
 from app.core.config import get_settings
 from app.core.logging import RequestContextMiddleware, setup_logging
 from app.core.metrics_middleware import PrometheusMiddleware
 from app.core.rate_limit import InMemoryRateLimitMiddleware
 from app.db.database import engine
-from app.services.inference import InferenceService
+from app.services.inference import DetectorUnavailable, InferenceService
 from app.services.storage import StorageService
 
 settings = get_settings()
@@ -56,6 +57,26 @@ async def http_exc_handler(request: Request, exc: HTTPException) -> JSONResponse
     )
 
 
+@app.exception_handler(DetectorUnavailable)
+async def detector_unavailable_handler(
+    request: Request, exc: DetectorUnavailable
+) -> JSONResponse:
+    logger.error(
+        "detector_unavailable",
+        extra={"request_id": getattr(request.state, "request_id", "n/a")},
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "success": False,
+            "error": {
+                "code": "DETECTOR_UNAVAILABLE",
+                "message": f"Detector not ready: {exc}",
+            },
+        },
+    )
+
+
 @app.exception_handler(ValidationError)
 async def validation_exc_handler(request: Request, _: ValidationError) -> JSONResponse:
     logger.warning(
@@ -89,9 +110,13 @@ async def unhandled_exc_handler(request: Request, exc: Exception) -> JSONRespons
     )
 
 
+def _vision_info() -> dict[str, object]:
+    return {"opencv": cv2.__version__, "detector": InferenceService.status()}
+
+
 @app.get("/health", tags=["System"])
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, object]:
+    return {"status": "ok", **_vision_info()}
 
 
 @app.get("/metrics", tags=["System"])
@@ -115,6 +140,9 @@ async def api_health() -> dict[str, object]:
     except Exception:
         logger.warning("health_minio_check_failed")
 
+    vision = _vision_info()
+    detector = vision["detector"]
+    checks["detector"] = bool(detector["ready"])  # type: ignore[index]
     status = "ok" if all(checks.values()) else "degraded"
     return {
         "status": status,
@@ -123,6 +151,7 @@ async def api_health() -> dict[str, object]:
             "loaded": InferenceService.is_model_loaded(),
             "version": settings.model_version,
         },
+        **vision,
     }
 
 
@@ -153,6 +182,11 @@ app.include_router(
 )
 app.include_router(
     truth.router,
+    prefix=settings.api_prefix,
+    dependencies=[Depends(enforce_optional_auth)],
+)
+app.include_router(
+    agent.router,
     prefix=settings.api_prefix,
     dependencies=[Depends(enforce_optional_auth)],
 )

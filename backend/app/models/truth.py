@@ -98,6 +98,15 @@ class ScanSession(Base):
     )
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Agent (TrayAgent): re-shot chain, agent verdict and the human approval gate
+    parent_scan_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    agent_decision: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    agent_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(), server_default=func.now(), onupdate=func.now()

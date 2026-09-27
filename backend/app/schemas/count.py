@@ -20,6 +20,7 @@ class CountResponseData(BaseModel):
     staff_id: str | None = None
     mock_mode: bool = False
     model_version: str = "unknown"
+    detector_backend: str | None = None
 
 
 class CountResponse(BaseModel):

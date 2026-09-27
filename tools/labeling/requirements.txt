@@ -1,0 +1,5 @@
+# Labeling tooling (not part of the runtime image)
+cvat-sdk==2.13.0
+opencv-python-headless==5.0.0.93
+numpy==2.2.6
+# Optional, for OWLv2 pre-labels (Apache-2.0): transformers + torch

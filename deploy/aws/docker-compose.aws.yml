@@ -1,0 +1,97 @@
+# TrayAgent on a single EC2 Graviton host (arm64).
+#
+# CDK stores this file (comment lines stripped) in SSM Parameter Store and
+# /opt/trayagent/update.sh writes it to /opt/trayagent/docker-compose.yml.
+# Every ${VAR} comes from /opt/trayagent/.env, which update.sh assembles from:
+#   app.env      non-secret settings rendered by CDK (bucket, region, repos, ...)
+#   secrets.env  POSTGRES_PASSWORD, generated on the instance at first boot
+#   image.env    IMAGE_TAG of the last deploy
+# Differences from the local docker-compose.yml: images come from ECR, S3
+# replaces MinIO, there is no Redis (the backend cache is optional) and every
+# container logs to CloudWatch Logs.
+name: trayagent
+
+x-awslogs: &awslogs
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION}
+    awslogs-group: ${LOG_GROUP}
+    tag: "{{.Name}}"
+
+services:
+  db:
+    image: public.ecr.aws/docker/library/postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trayagent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run update.sh, secrets.env is missing}
+      POSTGRES_DB: trayagent
+    volumes:
+      # Host directory on the encrypted gp3 root volume.
+      - /opt/trayagent/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trayagent -d trayagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *awslogs
+
+  backend:
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: prod
+      RUN_MIGRATIONS: "true"
+      DATABASE_URL: postgresql+asyncpg://trayagent:${POSTGRES_PASSWORD}@db:5432/trayagent
+      STORAGE_BACKEND: s3
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_REGION}
+      DETECTOR_BACKEND: ${DETECTOR_BACKEND}
+      MODEL_ONNX_PATH: /app/models/trayagent_v1.onnx
+      AGENT_ENABLED: "true"
+      AGENT_PLANNER: ${AGENT_PLANNER}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID}
+      CLOUDWATCH_METRICS_ENABLED: "true"
+      CLOUDWATCH_NAMESPACE: TrayAgent
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      DEFAULT_TENANT_KEY: ${DEFAULT_TENANT_KEY}
+      FACE_BLUR_ENABLED: "true"
+      # No Redis on this host: the connection is refused at once and the
+      # backend runs with its cache disabled.
+      REDIS_URL: redis://127.0.0.1:6379/0
+    volumes:
+      # ONNX weights synced from S3 by update.sh (empty for the classical baseline).
+      - /opt/trayagent/models:/app/models:ro
+    logging: *awslogs
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    logging: *awslogs
+
+  nginx:
+    image: public.ecr.aws/docker/library/nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    ports:
+      - "80:80"
+    volumes:
+      - /opt/trayagent/nginx.conf:/etc/nginx/nginx.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *awslogs

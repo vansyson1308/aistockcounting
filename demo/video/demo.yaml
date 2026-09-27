@@ -1,0 +1,9 @@
+# Demo recording configuration (record.py). Replace base_url with the CloudFront URL
+# printed by scripts/aws/deploy.sh. Photos: the owner's real demo trays.
+base_url: http://localhost
+tenant: null            # null = the deployment's DEFAULT_TENANT_KEY (demo on AWS)
+images_dir: ../../datasets/vj_items/images/demo
+trays:
+  A: {tray_code: TRAY-A, image: A_clean.jpg, pos: 12}
+  B: {tray_code: TRAY-B, image: B_glare.jpg, reshot: B_reshot.jpg, pos: 12}
+  C: {tray_code: TRAY-C, image: C_dense.jpg, previous: C_prev.jpg, previous_count: 40, pos: 40}

@@ -1,0 +1,10 @@
+# Blockers
+
+| ID | Opened | Blocker | Impact | Workaround in place | Owner action |
+|---|---|---|---|---|---|
+| B-001 | 2026-09-25 | No real tray photos in `datasets/vj_items/raw/`. | No training, no real metrics, no demo trays. The submission is NOT ready without them. | Procedural synthetic fixtures (`backend/tests/fixtures/`) are used **only in tests**. The labeling, training and eval tooling is built and tested on them. | Add ≥150 photos (≈30 hard cases), 3 "yesterday vs today" pairs and demo trays A/B/C. See Checkpoint A in STATUS.md. |
+| B-002 | 2026-09-25 | No AWS credentials or region. | Cannot deploy to Graviton, ECR, S3 or CloudWatch, and cannot measure Graviton latency. | The same containers run locally with docker compose (MinIO standing in for S3). The CDK app is written and `cdk synth`-tested. | Provide credentials (an IAM user or SSO profile) and a region (`ap-southeast-1` suggested). |
+| B-003 | 2026-09-25 | `docs/competition/SPEC.md` was missing. | The policy thresholds and gates had to be defined by us. | Authored from the brief (DECISIONS D-001). | Review SPEC §3, §4.4 and §7. |
+| B-004 | 2026-09-25 | Removing the football-pivot directories needs approval. | They stay in the tree (D-003). | None needed for runtime. | Approve or decline (Checkpoint A item 3). |
+| B-005 | 2026-09-25 | COOL (Best Use of COOL) is a paid AWS Marketplace subscription after a 7-day trial, on Graviton4 instances. | No COOL benchmark yet. | `benchmarks/cv_bench.py` and the protocol in `reports/cool/README.md` are ready. | Approve the Marketplace subscription and a c8g/c7i run (or skip the COOL award). |
+| B-006 | 2026-09-25 | The GitGuardian check fails on PR #5: incident 37618308, "Generic Password", in `deploy/aws/docker-compose.aws.yml` L27 (commit 8577052). | A red PR check; no real exposure. | It is a false positive: the line is the Compose required-variable reference `${POSTGRES_PASSWORD:?…}`. The real password is generated on the host at first boot and never committed. GitGuardian scans every PR commit, so no push can clear it. Explained on the PR. | Mark incident 37618308 as a false positive in the GitGuardian dashboard. |

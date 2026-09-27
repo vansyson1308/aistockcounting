@@ -1,0 +1,18 @@
+# Training environment for the TrayAgent detector (not part of the runtime image).
+# YOLOX 0.3.0 (Apache-2.0) from PyPI; install with:
+#   pip install -r training/requirements-yolox.txt
+#   pip install --no-deps --no-build-isolation yolox==0.3.0
+torch==2.5.1
+torchvision==0.20.1
+opencv-python-headless==5.0.0.93
+numpy==2.2.6
+loguru==0.7.3
+tabulate==0.10.0
+pycocotools==2.0.11
+thop==0.1.1.post2209072238
+tqdm==4.70.1
+psutil==7.2.2
+onnx==1.16.2
+pyyaml==6.0.3
+ninja==1.13.2
+tensorboard==2.21.0   # only used by the official GPU Trainer

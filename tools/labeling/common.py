@@ -31,7 +31,14 @@ def sha1_file(path: Path) -> str:
 
 def write_manifest(rows: list[dict], out_csv: Path) -> None:
     out_csv.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["image_filename", "tray_id", "staff_id", "created_at", "record_id", "source_key"]
+    fields = [
+        "image_filename",
+        "tray_id",
+        "staff_id",
+        "created_at",
+        "record_id",
+        "source_key",
+    ]
     with out_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()

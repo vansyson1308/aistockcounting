@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest==9.1.1
+# Provides the shellcheck binary used by tests/test_stack.py::test_shell_scripts_parse.
+shellcheck-py==0.11.0.1

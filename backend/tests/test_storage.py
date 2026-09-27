@@ -82,3 +82,34 @@ def test_storage_unknown_extension_normalized():
         image_path, _ = svc.save_image_and_thumbnail(image_bytes, "test.bmp")
 
     assert image_path.endswith(".jpg")
+
+
+def test_s3_backend_uses_region_and_head_bucket(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    from app.core import config
+    from app.services import storage as storage_module
+
+    monkeypatch.setenv("STORAGE_BACKEND", "s3")
+    monkeypatch.setenv("S3_BUCKET", "trayagent-evidence")
+    monkeypatch.setenv("AWS_REGION", "ap-southeast-1")
+    config.get_settings.cache_clear()
+    calls = {}
+
+    def fake_client(service, **kwargs):
+        calls.update(kwargs)
+        return MagicMock()
+
+    monkeypatch.setattr(storage_module.boto3, "client", fake_client)
+    try:
+        svc = storage_module.StorageService()
+        assert svc.bucket == "trayagent-evidence"
+        assert calls == {"region_name": "ap-southeast-1"}  # no static keys on AWS
+        svc.ensure_bucket()
+        svc.client.head_bucket.assert_called_once_with(Bucket="trayagent-evidence")
+        svc.client.create_bucket.assert_not_called()
+        svc.put_bytes("evidence/x.jpg", b"123")
+        svc.client.put_object.assert_called_once()
+    finally:
+        monkeypatch.undo()
+        config.get_settings.cache_clear()

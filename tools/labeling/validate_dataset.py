@@ -45,7 +45,9 @@ def main() -> None:
     for split in ["train", "val", "test"]:
         img_dir = root / "images" / split
         lbl_dir = root / "labels" / split
-        for img in sorted([x for x in img_dir.iterdir() if x.is_file() and not x.name.startswith(".")]):
+        for img in sorted(
+            [x for x in img_dir.iterdir() if x.is_file() and not x.name.startswith(".")]
+        ):
             total += 1
             lbl = lbl_dir / f"{img.stem}.txt"
             errors = validate_label_file(lbl, args.min_wh)

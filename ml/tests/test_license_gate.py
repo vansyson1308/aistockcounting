@@ -31,11 +31,15 @@ def test_scan_manifest_flags_banned(tmp_path):
     ]
 
 
-def test_grandfathered_manifest_not_flagged(tmp_path):
+def test_runtime_manifest_is_never_grandfathered(tmp_path):
+    # The legacy exception closed on 2026-09-25 (OpenCV 5 migration).
+    assert not license_gate.GRANDFATHERED
     manifest = tmp_path / "backend" / "requirements.txt"
     manifest.parent.mkdir()
     manifest.write_text("ultralytics==8.3.0\n")
-    assert license_gate.scan_manifest(manifest, tmp_path) == []
+    assert [(v[0], v[1]) for v in license_gate.scan_manifest(manifest, tmp_path)] == [
+        ("backend/requirements.txt", "ultralytics")
+    ]
 
 
 def test_package_json_dependencies_scanned(tmp_path):
