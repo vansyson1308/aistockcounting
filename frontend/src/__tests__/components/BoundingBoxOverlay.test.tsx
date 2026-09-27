@@ -15,7 +15,7 @@ describe('BoundingBoxOverlay', () => {
         naturalHeight={480}
         displayWidth={320}
         displayHeight={240}
-      />,
+      />
     );
     const rects = container.querySelectorAll('rect');
     expect(rects).toHaveLength(2);
@@ -33,7 +33,7 @@ describe('BoundingBoxOverlay', () => {
         naturalHeight={0}
         displayWidth={0}
         displayHeight={0}
-      />,
+      />
     );
     expect(container.querySelector('svg')).toBeNull();
   });

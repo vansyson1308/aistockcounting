@@ -26,6 +26,13 @@ def upgrade() -> None:
         "scan_sessions",
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
     )
+    # A scan still agent_running here was left by a run that died (the app is
+    # down while migrating). Its updated_at came from the database clock, not
+    # the app's UTC one the claim is judged against, so release it outright.
+    op.execute(
+        "UPDATE scan_sessions SET status = 'pending_review' "
+        "WHERE status = 'agent_running'"
+    )
     # Scans reviewed before this revision: the audit trail has the review.
     op.execute(
         "UPDATE scan_sessions SET reviewed_at = ("

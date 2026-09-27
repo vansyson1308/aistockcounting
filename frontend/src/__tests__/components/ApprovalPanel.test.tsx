@@ -185,4 +185,19 @@ describe('ApprovalPanel', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/approver id/i)).not.toBeInTheDocument();
   });
+
+  it('shows no final count for a photo nothing counted', () => {
+    render(
+      <ApprovalPanel
+        scan={makeScan({
+          status: 'needs_recapture',
+          agent_decision: 'request_recapture',
+          agent_count: null,
+          final_count: 0,
+        })}
+      />
+    );
+
+    expect(screen.getByText('Final count').nextElementSibling).toHaveTextContent('—');
+  });
 });

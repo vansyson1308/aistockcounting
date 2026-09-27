@@ -87,6 +87,44 @@ async function selectPhotoAndStart() {
 }
 
 describe('ScanPage agent flow', () => {
+  it('shows a finished retake request instead of saving a manual count over it', async () => {
+    mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
+    mockRun.mockRejectedValueOnce(new ApiClientError('NETWORK', 'Connection lost'));
+    mockTrace.mockResolvedValueOnce({
+      scan: makeScan({ status: 'agent_running' }),
+      latest_run_id: null,
+      steps: [],
+      runs: [],
+      live: null,
+    });
+    mockTrace.mockResolvedValue({
+      scan: makeScan({
+        status: 'needs_recapture',
+        agent_decision: 'request_recapture',
+        agent_reason: 'Hold the phone steady and retake the photo.',
+        attempt: 1,
+      }),
+      latest_run_id: 'r1',
+      steps: [],
+      runs: [],
+      live: null,
+    });
+
+    render(<ScanPage />);
+    await selectPhotoAndStart();
+    fireEvent.change(await screen.findByLabelText('Recounted quantity'), {
+      target: { value: '11' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    });
+
+    expect(
+      await screen.findByRole('region', { name: 'Please take the photo again' })
+    ).toBeInTheDocument();
+    expect(mockReview).not.toHaveBeenCalled();
+  });
+
   it('shows the latest count when someone else saved the review first', async () => {
     mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
     mockRun.mockRejectedValueOnce(new ApiClientError('NETWORK', 'Connection lost'));
@@ -107,8 +145,10 @@ describe('ScanPage agent flow', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/someone else updated this scan/i);
-    expect(screen.getByLabelText('Recounted quantity')).toHaveValue(9);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/someone else updated this scan/i);
+    expect(alert).toHaveTextContent('Their count: 9.');
+    expect(screen.getByLabelText('Recounted quantity')).toHaveValue(11); // kept
     expect(mockReview).toHaveBeenCalledTimes(1);
   });
 

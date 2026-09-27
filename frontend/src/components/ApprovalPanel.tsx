@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { statusLabel } from '@/lib/agent-format';
+import { knownFinalCount, statusLabel } from '@/lib/agent-format';
 import { ApiClientError, approveScan } from '@/lib/api';
 import { sanitizeText } from '@/lib/sanitize';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -34,7 +34,7 @@ function FinalDecision({ scan }: { scan: ScanSession }) {
       </div>
       <div>
         <dt className="text-slate-600 dark:text-slate-400">Final count</dt>
-        <dd className="font-semibold tabular-nums">{scan.final_count}</dd>
+        <dd className="font-semibold tabular-nums">{knownFinalCount(scan) ?? '—'}</dd>
       </div>
       <div>
         <dt className="text-slate-600 dark:text-slate-400">Decided by</dt>

@@ -83,6 +83,7 @@ def test_scan_unit_value_migration_backfills(monkeypatch) -> None:
     sql = _offline_sql("20260925_0004:20260927_0005", monkeypatch)
     assert "ALTER TABLE scan_sessions ADD COLUMN unit_value" in sql
     assert "ALTER TABLE scan_sessions ADD COLUMN reviewed_at" in sql
+    assert "SET status = 'pending_review' WHERE status = 'agent_running'" in sql
     assert (
         "ALTER TABLE scan_sessions ADD COLUMN version INTEGER DEFAULT '1' NOT NULL"
         in sql

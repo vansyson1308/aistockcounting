@@ -27,16 +27,27 @@ def start(scan_id: str, run_id: str) -> None:
         }
 
 
-def add_step(scan_id: str, step: dict[str, Any]) -> None:
-    with _LOCK:
-        if scan_id in _RUNS:
-            _RUNS[scan_id]["steps"].append(step)
+def _current(scan_id: str, run_id: str | None) -> dict[str, Any] | None:
+    # A run that lost its claim (it went stale and a new run took the scan)
+    # must not write into, or end, the newer run's live entry.
+    run = _RUNS.get(scan_id)
+    if run is None or (run_id is not None and run["run_id"] != run_id):
+        return None
+    return run
 
 
-def finish(scan_id: str) -> None:
+def add_step(scan_id: str, step: dict[str, Any], run_id: str | None = None) -> None:
     with _LOCK:
-        if scan_id in _RUNS:
-            _RUNS[scan_id]["running"] = False
+        run = _current(scan_id, run_id)
+        if run is not None:
+            run["steps"].append(step)
+
+
+def finish(scan_id: str, run_id: str | None = None) -> None:
+    with _LOCK:
+        run = _current(scan_id, run_id)
+        if run is not None:
+            run["running"] = False
 
 
 def get(scan_id: str) -> dict[str, Any] | None:

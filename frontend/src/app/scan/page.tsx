@@ -286,6 +286,17 @@ export default function ScanPage() {
       setError('Enter the number of items you counted on the tray.');
       return;
     }
+    if (decision === null) {
+      // The agent run this page lost track of may have finished since (e.g.
+      // it asked for a re-shot or escalated): show that instead of saving
+      // a manual count over it.
+      const recovered = await recoverFromTrace(scan.id);
+      if (recovered) {
+        setError('');
+        announceOutcome(recovered);
+        return;
+      }
+    }
     try {
       setReviewing(true);
       setError('');
@@ -304,7 +315,9 @@ export default function ScanPage() {
     } catch (err) {
       if (
         err instanceof ApiClientError &&
-        (err.code === 'AGENT_RUNNING' || err.code === 'SCAN_CHANGED')
+        (err.code === 'AGENT_RUNNING' ||
+          err.code === 'SCAN_CHANGED' ||
+          err.code === 'APPROVAL_REQUIRED')
       ) {
         // The agent run this page lost track of is still going (or just
         // finished): show its result instead of the manual form.
@@ -318,8 +331,9 @@ export default function ScanPage() {
           setError('TrayAgent is still counting this tray. Wait a few seconds, then save again.');
           return;
         }
-        // Someone else saved this scan first: show their numbers before this
-        // person decides whether to save over them.
+        // Someone else saved this scan first: show their count next to this
+        // person's (kept in the field) before they decide to save over it.
+        let theirs = '';
         try {
           const latest = await getTrace(scan.id);
           setResult((prev) => ({
@@ -327,12 +341,14 @@ export default function ScanPage() {
             discrepancy: prev?.discrepancy ?? null,
             agent: prev?.agent ?? null,
           }));
-          setManualCount(latest.scan.manual_count != null ? String(latest.scan.manual_count) : '');
+          if (latest.scan.manual_count != null) {
+            theirs = ` Their count: ${latest.scan.manual_count}.`;
+          }
         } catch {
           // keep the form as it is; the message below still applies
         }
         setError(
-          'Someone else updated this scan while you were reviewing it. The latest count is shown; check it before saving again.'
+          `Someone else updated this scan while you were reviewing it.${theirs} Check the tray, then save again to record your count.`
         );
         return;
       }

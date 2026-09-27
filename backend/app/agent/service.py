@@ -74,7 +74,9 @@ async def previous_approved_scan(
 
     ``approved_by`` is also set when a human *rejects* an escalated count
     (the scan goes back to ``needs_recapture``, then ``superseded``), so those
-    statuses are excluded: a rejected photo is not a reference.
+    statuses are excluded: a rejected photo is not a reference. Nor is a
+    photo the agent asked to retake, even if a human then counted the tray
+    by hand: the count may stand, the image is still unusable.
     """
     q = (
         select(ScanSession)
@@ -82,6 +84,10 @@ async def previous_approved_scan(
             ScanSession.tenant_key == scan.tenant_key,
             ScanSession.tray_code == scan.tray_code,
             ScanSession.id != scan.id,
+            or_(
+                ScanSession.agent_decision.is_(None),
+                ScanSession.agent_decision != "request_recapture",
+            ),
             or_(
                 ScanSession.status == "reviewed",
                 and_(
@@ -156,10 +162,10 @@ async def run_for_scan(
             evidence=evidence or S3EvidenceStore(storage),
             key_prefix=f"evidence/{scan.id.hex}/{run_id.hex}",
             run_id=run_id,
-            on_step=lambda e: progress.add_step(scan_key, e.as_dict()),
+            on_step=lambda e: progress.add_step(scan_key, e.as_dict(), str(run_id)),
         )
     finally:
-        progress.finish(scan_key)
+        progress.finish(scan_key, str(run_id))
 
     # What this run replaces, kept in the audit trail: a run that produces no
     # count clears these on the scan. An earlier agent run's boxes are already

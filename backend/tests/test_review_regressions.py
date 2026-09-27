@@ -744,3 +744,43 @@ async def test_resolving_a_leftover_discrepancy_keeps_the_photo_closed(
         probe = ScanSession(id=uuid.uuid4(), tenant_key="default", tray_code="T-C")
         ref = await previous_approved_scan(db, probe)
         assert ref is None or str(ref.id) != sid
+
+
+# Round 7 of the review.
+
+
+# A run that lost its claim cannot write into, or end, the newer run's timeline.
+def test_stale_run_cannot_touch_the_newer_live_timeline() -> None:
+    from app.agent import progress
+
+    progress.start("s-7", "old")
+    progress.start("s-7", "new")  # a new run took the scan over
+    progress.add_step("s-7", {"seq": 1}, "old")
+    progress.finish("s-7", "old")
+    live = progress.get("s-7")
+    assert live["run_id"] == "new" and live["running"] is True
+    assert live["steps"] == []
+    progress.add_step("s-7", {"seq": 1}, "new")
+    progress.finish("s-7", "new")
+    live = progress.get("s-7")
+    assert live["steps"] == [{"seq": 1}] and live["running"] is False
+
+
+# A photo the agent asked to retake is never the comparison reference, even
+# after a human counted the tray by hand.
+async def test_retake_requested_photo_is_not_a_reference(client, agent_on) -> None:
+    from app.agent.service import previous_approved_scan
+    from app.models.truth import ScanSession
+
+    body = await _tray_c(client)
+    sid = body["scan"]["id"]
+    await _set(
+        sid,
+        status="reviewed",
+        agent_decision="request_recapture",
+        created_at=datetime.utcnow() + timedelta(minutes=5),
+    )
+    async with _db() as db:
+        probe = ScanSession(id=uuid.uuid4(), tenant_key="default", tray_code="T-C")
+        ref = await previous_approved_scan(db, probe)
+        assert ref is not None and str(ref.id) != sid

@@ -10,6 +10,7 @@ import LoadingSkeleton from '@/components/LoadingSkeleton';
 import {
   decisionBadgeClass,
   decisionLabel,
+  knownFinalCount,
   lastStep,
   statusLabel,
   stepMetrics,
@@ -97,13 +98,8 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   // null when the agent escalated before it counted (final_count is then a
   // placeholder 0, not a count).
   const agentCount = scan?.agent_count ?? null;
-  // A count other than the agent's: a human's (review or approval correction;
-  // a rejection sets approved_by but records no count) or a single-shot
-  // detector count from before the agent (no agent decision, but a detector
-  // pass ran, so it has a processing time; the API always sends boxes_json).
-  const otherCount =
-    (scan?.manual_count ?? null) !== null ||
-    (!scan?.agent_decision && (scan?.processing_time_ms ?? null) !== null);
+  // null when nothing counted the photo (never the placeholder 0).
+  const finalCount = scan ? knownFinalCount(scan) : null;
   const originalSrc = buildImageUrl(scan?.image_path);
   const finalSrc = evidenceSrc(terminal?.evidence_url);
   const zoomSrc = evidenceSrc(zoom?.evidence_url);
@@ -214,9 +210,9 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
             }
           />
         </dl>
-        {scan.final_count !== agentCount && (agentCount !== null || otherCount) && (
+        {finalCount !== null && finalCount !== agentCount && (
           <p className="text-sm">
-            Final approved count: <strong className="tabular-nums">{scan.final_count}</strong>
+            Final approved count: <strong className="tabular-nums">{finalCount}</strong>
           </p>
         )}
         {scan.variance_value !== null && scan.variance_value !== undefined && (
