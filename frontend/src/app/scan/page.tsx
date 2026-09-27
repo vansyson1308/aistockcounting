@@ -24,7 +24,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { useReviewQueueStore } from '@/store/useReviewQueueStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useToastStore } from '@/store/useToastStore';
-import { ScanCreateData, TraceStep } from '@/types';
+import { ScanCreateData, ScanSession, TraceStep } from '@/types';
 
 const POLL_INTERVAL_MS = 400;
 
@@ -44,6 +44,13 @@ function parseOptionalNumber(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Pre-fill for the manual count: the agent's count, never a placeholder. */
+function countField(scan: Pick<ScanSession, 'agent_count'>): string {
+  return scan.agent_count === null || scan.agent_count === undefined
+    ? ''
+    : String(scan.agent_count);
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -235,7 +242,7 @@ export default function ScanPage() {
       });
       scanId = created.scan.id;
       setResult(created);
-      setManualCount(String(created.scan.final_count));
+      setManualCount(countField(created.scan));
       setPhase('running');
       setStatus('TrayAgent is checking the photo…');
 
@@ -244,7 +251,7 @@ export default function ScanPage() {
       stopPolling();
       if (data.agent?.trace?.length) setSteps(data.agent.trace);
       setResult(data);
-      setManualCount(String(data.scan.final_count));
+      setManualCount(countField(data.scan));
       setRetake(null);
       setPhase('done');
 
@@ -270,12 +277,18 @@ export default function ScanPage() {
 
   const submitReview = async () => {
     if (!scan) return;
+    const counted = parseOptionalNumber(manualCount);
+    if (counted === null || !Number.isInteger(counted) || counted < 0) {
+      // No agent count to fall back on: the stored final_count of an uncounted
+      // scan is only a placeholder 0, never a count to record.
+      setError('Enter the number of items you counted on the tray.');
+      return;
+    }
     try {
       setReviewing(true);
       setError('');
       const data = await reviewAuditScan(scan.id, {
-        manual_count:
-          manualCount.trim() !== '' ? parseOptionalNumber(manualCount) : scan.final_count,
+        manual_count: counted,
         expected_count: parseOptionalNumber(expectedCount) ?? scan.expected_count ?? null,
         unit_value: parseOptionalNumber(unitValue),
         is_ai_correct: isAICorrect,

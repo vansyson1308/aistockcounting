@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -167,6 +168,10 @@ class OnnxYoloxDetector:
         self.nms_thr = nms_thr
         self.net = cv2.dnn.readNetFromONNX(str(model_path), ENGINES[engine])
         self.version = meta.version
+        # One Net is shared by every request, and agent runs call it from
+        # worker threads; setInput/forward keep state on the Net, so they must
+        # not interleave.
+        self._lock = threading.Lock()
 
     def raw_forward(
         self, img_bgr: np.ndarray
@@ -177,9 +182,10 @@ class OnnxYoloxDetector:
         blob = cv2.dnn.blobFromImage(
             padded, 1.0, (padded.shape[1], padded.shape[0]), swapRB=self.meta.swap_rb
         )
-        self.net.setInput(blob)
-        out = self.net.forward()
-        return np.asarray(out).reshape(-1, out.shape[-1]), ratio, pad
+        with self._lock:
+            self.net.setInput(blob)
+            out = np.array(self.net.forward(), copy=True)
+        return out.reshape(-1, out.shape[-1]), ratio, pad
 
     def detect(self, img_bgr: np.ndarray) -> list[Det]:
         raw, ratio, (px, py) = self.raw_forward(img_bgr)

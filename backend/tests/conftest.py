@@ -20,6 +20,23 @@ from collections.abc import AsyncGenerator
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """The limiter keeps per-process counters: one test's uploads must not
+    throttle a later test's (the suite posts far more than 30 scans a minute)."""
+    yield
+    main = sys.modules.get("app.main")
+    if main is None:
+        return
+    from app.core.rate_limit import InMemoryRateLimitMiddleware
+
+    node = main.app.middleware_stack
+    while node is not None:
+        if isinstance(node, InMemoryRateLimitMiddleware):
+            node.hits.clear()
+        node = getattr(node, "app", None)
+
+
 @pytest.fixture
 def image_bytes() -> bytes:
     try:

@@ -23,11 +23,17 @@ def _cfg(buffer: io.StringIO | None = None) -> Config:
     return cfg
 
 
-def test_revision_chain_is_linear_and_ends_at_agent_steps() -> None:
+def test_revision_chain_is_linear_and_ends_at_scan_unit_value() -> None:
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["20260925_0004"]
+    assert script.get_heads() == ["20260927_0005"]
     revs = [r.revision for r in script.walk_revisions()]
-    assert revs == ["20260925_0004", "20260510_0003", "20260315_0002", "20260201_0001"]
+    assert revs == [
+        "20260927_0005",
+        "20260925_0004",
+        "20260510_0003",
+        "20260315_0002",
+        "20260201_0001",
+    ]
 
 
 def _offline_sql(rng: str, monkeypatch) -> str:
@@ -69,6 +75,16 @@ def test_orm_matches_migration(monkeypatch) -> None:
         "approved_at",
     }
     assert agent_cols <= {c.name for c in ScanSession.__table__.columns}
+
+
+def test_scan_unit_value_migration_backfills(monkeypatch) -> None:
+    from app.models.truth import ScanSession
+
+    sql = _offline_sql("20260925_0004:20260927_0005", monkeypatch)
+    assert "ALTER TABLE scan_sessions ADD COLUMN unit_value" in sql
+    assert "SET unit_value = variance_value / variance_count" in sql
+    assert "variance_count <> 0" in sql  # never divides by zero
+    assert "unit_value" in {c.name for c in ScanSession.__table__.columns}
 
 
 def test_full_offline_upgrade_generates(monkeypatch) -> None:

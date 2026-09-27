@@ -81,7 +81,9 @@ export default function ApprovalPanel({ scan, onDecided }: Props) {
   }, [staffId]);
 
   const awaiting = scan.status === 'awaiting_approval';
-  const agentCount = scan.agent_count ?? scan.final_count;
+  // null when the agent escalated before it counted: nothing to approve, only
+  // correct or reject (the API refuses 'approve' in that case).
+  const agentCount = scan.agent_count ?? null;
 
   const submit = async (decision: ApproveDecision) => {
     setApiError('');
@@ -195,10 +197,14 @@ export default function ApprovalPanel({ scan, onDecided }: Props) {
           <button
             type="button"
             onClick={() => submit('approve')}
-            disabled={submitting !== null}
+            disabled={submitting !== null || agentCount === null}
             className={`w-full rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
           >
-            {submitting === 'approve' ? 'Saving…' : `Approve agent count (${agentCount})`}
+            {submitting === 'approve'
+              ? 'Saving…'
+              : agentCount === null
+                ? 'No agent count to approve: correct or reject it'
+                : `Approve agent count (${agentCount})`}
           </button>
 
           <fieldset className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">

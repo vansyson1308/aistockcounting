@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
-from sqlalchemy import desc, or_, select
+from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import progress
@@ -34,13 +34,15 @@ from app.agent.trace import persist_run
 from app.core.config import get_settings
 from app.core.metrics import agent_latency_seconds, agent_runs_total, agent_steps_used
 from app.cv.imageio import decode_image
-from app.models.truth import ScanSession
+from app.models.truth import Discrepancy, ScanSession
 from app.services.detector_cv import Detector
 from app.services.storage import StorageService
 
 logger = logging.getLogger("app")
 
 GATED_STATUSES = {"awaiting_approval"}
+# A human rejected the count (or the re-shot that followed replaced it).
+REJECTED_STATUSES = ("needs_recapture", "superseded")
 
 
 class S3EvidenceStore:
@@ -55,14 +57,25 @@ async def previous_approved_scan(
     db: AsyncSession, scan: ScanSession
 ) -> ScanSession | None:
     """The latest earlier scan of the same tray that a human approved or that
-    auto-accepted against POS: 'yesterday's approved photo'."""
+    auto-accepted against POS: 'yesterday's approved photo'.
+
+    ``approved_by`` is also set when a human *rejects* an escalated count
+    (the scan goes back to ``needs_recapture``, then ``superseded``), so those
+    statuses are excluded: a rejected photo is not a reference.
+    """
     q = (
         select(ScanSession)
         .where(
             ScanSession.tenant_key == scan.tenant_key,
             ScanSession.tray_code == scan.tray_code,
             ScanSession.id != scan.id,
-            or_(ScanSession.status == "reviewed", ScanSession.approved_by.is_not(None)),
+            or_(
+                ScanSession.status == "reviewed",
+                and_(
+                    ScanSession.approved_by.is_not(None),
+                    ScanSession.status.not_in(REJECTED_STATUSES),
+                ),
+            ),
         )
         .order_by(desc(ScanSession.created_at))
         .limit(1)
@@ -136,6 +149,13 @@ async def run_for_scan(
         progress.finish(scan_key)
 
     apply_result(scan, result)
+    if result.count is None:
+        # This run produced no count (re-shot requested, or escalated before
+        # counting). A count and an open discrepancy left by an earlier run on
+        # the same scan no longer describe it.
+        await _close_open_discrepancy(
+            db, scan, "Superseded: a new agent run produced no count."
+        )
     if result.action == Action.REQUEST_RECAPTURE:
         scan.status = "needs_recapture"
     elif result.action == Action.AUTO_ACCEPT:
@@ -187,6 +207,15 @@ def apply_result(scan: ScanSession, result: AgentResult) -> None:
         scan.quality_score = quality.get("score")
         scan.quality_flags = quality.get("flags")
     if result.count is None:
+        # No count from this run: clear what an earlier run recorded, so the
+        # scan does not show a count, boxes or variance that no longer apply.
+        scan.detected_count = 0
+        scan.final_count = 0
+        scan.boxes_json = []
+        scan.confidence_avg = None
+        scan.variance_count = None
+        scan.variance_value = None
+        scan.processing_time_ms = result.elapsed_ms
         return
     boxes = [d.as_dict() for d in result.dets_original]
     scan.detected_count = result.count
@@ -198,6 +227,22 @@ def apply_result(scan: ScanSession, result: AgentResult) -> None:
     scan.processing_time_ms = result.elapsed_ms
     if scan.expected_count is not None:
         scan.variance_count = result.count - scan.expected_count
+
+
+async def _close_open_discrepancy(
+    db: AsyncSession, scan: ScanSession, note: str
+) -> None:
+    rows = (
+        await db.execute(
+            select(Discrepancy).where(
+                Discrepancy.scan_id == scan.id, Discrepancy.status == "open"
+            )
+        )
+    ).scalars()
+    for discrepancy in rows:
+        discrepancy.status = "ignored"
+        discrepancy.resolution_note = note
+        discrepancy.resolved_at = datetime.utcnow()
 
 
 def agent_payload(

@@ -13,6 +13,21 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def _image_ext(image_bytes: bytes, filename: str) -> str:
+    """Extension for the stored object, from the bytes first.
+
+    The upload may have been re-encoded (face blur writes JPEG), so the
+    client's filename can disagree with the bytes; the key and ContentType
+    must describe what is actually stored.
+    """
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    ext = Path(filename).suffix.lower()
+    return ext if ext in {".jpg", ".jpeg", ".png"} else ".jpg"
+
+
 class StorageService:
     """S3-API object storage: MinIO locally, Amazon S3 on AWS.
 
@@ -79,9 +94,7 @@ class StorageService:
     ) -> tuple[str, str | None]:
         self.ensure_bucket()
 
-        ext = Path(filename).suffix.lower()
-        if ext not in {".jpg", ".jpeg", ".png"}:
-            ext = ".jpg"
+        ext = _image_ext(image_bytes, filename)
 
         object_key = f"uploads/{uuid.uuid4().hex}{ext}"
         content_type = "image/png" if ext == ".png" else "image/jpeg"

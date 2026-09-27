@@ -101,6 +101,28 @@ describe('ApprovalPanel', () => {
     });
   });
 
+  it('offers no approval when the agent escalated before it counted', async () => {
+    mockApprove.mockResolvedValueOnce({
+      scan: makeScan({ status: 'reviewed' }),
+      discrepancy: null,
+    });
+    const user = userEvent.setup();
+    render(<ApprovalPanel scan={makeScan({ agent_count: null, final_count: 0 })} />);
+
+    const approve = screen.getByRole('button', { name: /no agent count to approve/i });
+    expect(approve).toBeDisabled();
+    await user.click(approve);
+    expect(mockApprove).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/approver id/i), 'MGR-1');
+    await user.type(screen.getByLabelText('Corrected count'), '24');
+    await user.click(screen.getByRole('button', { name: 'Save correction' }));
+    expect(mockApprove).toHaveBeenCalledWith(
+      'scan-1',
+      expect.objectContaining({ decision: 'correct', corrected_count: 24 })
+    );
+  });
+
   it('sends a rejection with its note', async () => {
     mockApprove.mockResolvedValueOnce({
       scan: makeScan({ status: 'needs_recapture' }),

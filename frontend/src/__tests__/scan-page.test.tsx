@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ScanPage from '@/app/scan/page';
-import { createAuditScan, getTrace, runAgent } from '@/lib/api';
+import { ApiClientError, createAuditScan, getTrace, reviewAuditScan, runAgent } from '@/lib/api';
 import { ScanCreateData, ScanSession, TraceStep } from '@/types';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -12,6 +12,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     createAuditScan: vi.fn(),
     runAgent: vi.fn(),
     getTrace: vi.fn(),
+    reviewAuditScan: vi.fn(),
   };
 });
 vi.mock('@/lib/image-compress', () => ({ compressImage: async (f: File) => f }));
@@ -19,6 +20,7 @@ vi.mock('@/lib/image-compress', () => ({ compressImage: async (f: File) => f }))
 const mockCreate = vi.mocked(createAuditScan);
 const mockRun = vi.mocked(runAgent);
 const mockTrace = vi.mocked(getTrace);
+const mockReview = vi.mocked(reviewAuditScan);
 
 function makeScan(overrides: Partial<ScanSession> = {}): ScanSession {
   return {
@@ -68,6 +70,7 @@ beforeEach(() => {
   mockCreate.mockReset();
   mockRun.mockReset();
   mockTrace.mockReset();
+  mockReview.mockReset();
 });
 
 afterEach(() => cleanup());
@@ -84,6 +87,45 @@ async function selectPhotoAndStart() {
 }
 
 describe('ScanPage agent flow', () => {
+  it('requires a counted quantity when the agent run failed before counting', async () => {
+    mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
+    mockRun.mockRejectedValueOnce(new ApiClientError('AGENT_FAILED', 'Agent crashed'));
+    mockTrace.mockResolvedValue({
+      scan: makeScan(),
+      latest_run_id: null,
+      steps: [],
+      runs: [],
+      live: null,
+    });
+    mockReview.mockResolvedValue({
+      scan: makeScan({ status: 'reviewed', manual_count: 11, final_count: 11 }),
+      discrepancy: null,
+    });
+
+    render(<ScanPage />);
+    await selectPhotoAndStart();
+
+    const quantity = await screen.findByLabelText('Recounted quantity');
+    // The placeholder final_count (0) of an uncounted scan is never prefilled.
+    expect(quantity).toHaveValue(null);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    });
+    expect(mockReview).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter the number of items you counted on the tray.'
+    );
+
+    fireEvent.change(quantity, { target: { value: '11' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    });
+    expect(mockReview).toHaveBeenCalledWith(
+      'scan-1',
+      expect.objectContaining({ manual_count: 11 })
+    );
+  });
+
   it('uploads without the agent, shows live steps, then a retake card linked to the scan', async () => {
     mockCreate.mockResolvedValue({ scan: makeScan(), discrepancy: null, agent: null });
     let finishRun: (data: ScanCreateData) => void = () => {};

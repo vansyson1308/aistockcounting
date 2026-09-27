@@ -22,7 +22,7 @@ from app.core.config import get_settings
 from app.core.errors import api_error
 from app.db.database import get_db
 from app.models.agent import AgentStep
-from app.models.truth import Discrepancy, ScanSession
+from app.models.truth import AuditEvent, Discrepancy, ScanSession
 from app.schemas.agent import (
     AgentRunResponse,
     ApproveRequest,
@@ -35,7 +35,8 @@ from app.services.storage import StorageService
 router = APIRouter(prefix="", tags=["Agent"])
 
 # Statuses the agent may (re-)run from. It may never run over a pending human
-# decision or over a human's final decision.
+# decision or over a human's final decision (approved_by, or a human review;
+# see _human_reviewed).
 RUNNABLE = {"pending_review", "needs_recapture", "agent_running", "discrepancy_open"}
 
 
@@ -62,6 +63,30 @@ async def _open_discrepancy(db: AsyncSession, scan_id: UUID) -> Discrepancy | No
     ).scalar_one_or_none()
 
 
+async def _human_reviewed(db: AsyncSession, scan: ScanSession) -> bool:
+    """True once a human entered a count through PATCH /review.
+
+    That review can leave the scan in ``discrepancy_open``, a status the agent
+    may otherwise run from (legacy single-shot scans), so the status alone
+    does not tell whether the count is a human's final decision.
+    """
+    if scan.manual_count is not None:
+        return True
+    reviewed = (
+        await db.execute(
+            select(AuditEvent.id)
+            .where(
+                AuditEvent.tenant_key == scan.tenant_key,
+                AuditEvent.entity_type == "scan_session",
+                AuditEvent.entity_id == str(scan.id),
+                AuditEvent.action == "SCAN_REVIEWED",
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return reviewed is not None
+
+
 def evidence_url(key: str | None) -> str | None:
     if not key:
         return None
@@ -81,14 +106,22 @@ async def agent_run(
     inference: InferenceService = Depends(InferenceService),
 ) -> AgentRunResponse:
     scan = await _load_scan(db, scan_id, tenant)
-    if scan.status not in RUNNABLE or scan.approved_by is not None:
+    if (
+        scan.status not in RUNNABLE
+        or scan.approved_by is not None
+        or await _human_reviewed(db, scan)
+    ):
         raise api_error(
             409,
             "AGENT_RUN_NOT_ALLOWED",
             f"Scan status '{scan.status}' cannot be re-run by the agent.",
         )
     result = await run_for_scan(
-        db, scan, detector=inference.detector(), storage=storage
+        db,
+        scan,
+        detector=inference.detector(),
+        storage=storage,
+        unit_value=scan.unit_value,
     )
     await db.commit()
     await db.refresh(scan)
@@ -179,6 +212,16 @@ async def approve_scan(
             "NOT_AWAITING_APPROVAL",
             f"Scan status is '{scan.status}'; only escalated scans can be approved.",
         )
+    if payload.decision == "approve" and scan.agent_count is None:
+        # The agent escalated before it produced a count (e.g. the planner
+        # escalated right after assess, or the budget ran out): there is no
+        # agent count to approve, and approving must never record a stale or
+        # default number.
+        raise api_error(
+            409,
+            "NO_AGENT_COUNT",
+            "The agent produced no count for this scan; correct it or reject it.",
+        )
     before = {"agent_count": scan.agent_count, "final_count": scan.final_count}
     if payload.decision == "reject":
         scan.status = "needs_recapture"
@@ -195,9 +238,7 @@ async def approve_scan(
         count = (
             payload.corrected_count
             if payload.decision == "correct"
-            else (
-                scan.agent_count if scan.agent_count is not None else scan.final_count
-            )
+            else scan.agent_count
         )
         scan.final_count = int(count)
         if payload.decision == "correct":

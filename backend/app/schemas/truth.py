@@ -38,6 +38,7 @@ class ScanSessionData(BaseModel):
     expected_count: int | None = None
     variance_count: int | None = None
     variance_value: float | None = None
+    unit_value: float | None = None
     confidence_avg: float | None = None
     boxes_json: list[Box] | None = None
     quality_score: float | None = None

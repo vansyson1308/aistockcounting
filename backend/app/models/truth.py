@@ -87,6 +87,10 @@ class ScanSession(Base):
     expected_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     variance_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     variance_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Unit value used for variance_value (form input, POS snapshot or tray
+    # master), kept so later counts (agent re-run, approval, review) price the
+    # variance from the same figure.
+    unit_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     boxes_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)

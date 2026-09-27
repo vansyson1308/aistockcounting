@@ -81,6 +81,7 @@ def _scan_payload(row: ScanSession) -> dict:
         "expected_count": row.expected_count,
         "variance_count": row.variance_count,
         "variance_value": row.variance_value,
+        "unit_value": row.unit_value,
         "confidence_avg": row.confidence_avg,
         "boxes_json": row.boxes_json or [],
         "quality_score": row.quality_score,
@@ -194,6 +195,18 @@ async def _upsert_discrepancy(
     if scan.expected_count is None or scan.variance_count is None:
         return None
 
+    # Price the variance from the count that is current now. A unit value given
+    # with this call wins and is kept on the scan; otherwise the one stored when
+    # the scan was created is used. The previous variance_value is never
+    # reused: it belongs to an older count (agent count before a correction).
+    if unit_value is not None:
+        scan.unit_value = unit_value
+    unit = scan.unit_value
+    variance_value = (
+        float(scan.variance_count) * float(unit) if unit is not None else None
+    )
+    scan.variance_value = variance_value
+
     existing = (
         await db.execute(
             select(Discrepancy)
@@ -212,12 +225,6 @@ async def _upsert_discrepancy(
             existing.resolved_at = datetime.utcnow()
         return None
 
-    variance_value = (
-        float(scan.variance_count) * float(unit_value)
-        if unit_value is not None
-        else scan.variance_value
-    )
-    scan.variance_value = variance_value
     scan.status = "discrepancy_open"
 
     if existing is None:
@@ -315,6 +322,7 @@ async def create_scan(
             image_path=image_path,
             image_thumbnail=image_thumbnail,
             expected_count=final_expected,
+            unit_value=final_unit_value,
             parent_scan_id=parent_scan_id,
             attempt=attempt,
             status="agent_running",
@@ -376,6 +384,7 @@ async def create_scan(
             image_path=image_path,
             image_thumbnail=image_thumbnail,
             expected_count=final_expected,
+            unit_value=final_unit_value,
             parent_scan_id=parent_scan_id,
             attempt=attempt,
             status="pending_review",
@@ -427,6 +436,7 @@ async def create_scan(
         expected_count=final_expected,
         variance_count=variance_count,
         variance_value=variance_value,
+        unit_value=final_unit_value,
         confidence_avg=detection.get("confidence_avg"),
         boxes_json=detection.get("boxes", []),
         quality_score=quality.score,
@@ -509,11 +519,8 @@ async def review_scan(
         if scan.expected_count is not None
         else None
     )
-    scan.variance_value = (
-        float(scan.variance_count) * float(payload.unit_value)
-        if scan.variance_count is not None and payload.unit_value is not None
-        else scan.variance_value
-    )
+    if scan.variance_count is None:
+        scan.variance_value = None
 
     discrepancy = await _upsert_discrepancy(db, scan, unit_value=payload.unit_value)
     await _record_event(
