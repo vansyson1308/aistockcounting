@@ -47,6 +47,7 @@ export type ScanSession = {
   expected_count?: number | null;
   variance_count?: number | null;
   variance_value?: number | null;
+  unit_value?: number | null;
   confidence_avg?: number | null;
   boxes_json?: Box[] | null;
   quality_score?: number | null;

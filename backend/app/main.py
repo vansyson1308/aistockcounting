@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import generate_latest
 from pydantic import ValidationError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.routes import agent, count, export, history, save, stats, truth
 from app.core.auth import enforce_optional_auth
@@ -72,6 +73,27 @@ async def detector_unavailable_handler(
             "error": {
                 "code": "DETECTOR_UNAVAILABLE",
                 "message": f"Detector not ready: {exc}",
+            },
+        },
+    )
+
+
+@app.exception_handler(StaleDataError)
+async def stale_scan_handler(request: Request, _: StaleDataError) -> JSONResponse:
+    # A scan changed between this request's read and its write (e.g. a review
+    # racing an agent run): nothing was written, the client reloads.
+    logger.warning(
+        "stale_write",
+        extra={"request_id": getattr(request.state, "request_id", "n/a")},
+    )
+    return JSONResponse(
+        status_code=409,
+        content={
+            "success": False,
+            "error": {
+                "code": "SCAN_CHANGED",
+                "message": "This scan changed while you were working on it; "
+                "reload it and try again.",
             },
         },
     )

@@ -101,6 +101,28 @@ describe('ApprovalPanel', () => {
     });
   });
 
+  it('offers no approval when the agent escalated before it counted', async () => {
+    mockApprove.mockResolvedValueOnce({
+      scan: makeScan({ status: 'reviewed' }),
+      discrepancy: null,
+    });
+    const user = userEvent.setup();
+    render(<ApprovalPanel scan={makeScan({ agent_count: null, final_count: 0 })} />);
+
+    const approve = screen.getByRole('button', { name: /no agent count to approve/i });
+    expect(approve).toBeDisabled();
+    await user.click(approve);
+    expect(mockApprove).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/approver id/i), 'MGR-1');
+    await user.type(screen.getByLabelText('Corrected count'), '24');
+    await user.click(screen.getByRole('button', { name: 'Save correction' }));
+    expect(mockApprove).toHaveBeenCalledWith(
+      'scan-1',
+      expect.objectContaining({ decision: 'correct', corrected_count: 24 })
+    );
+  });
+
   it('sends a rejection with its note', async () => {
     mockApprove.mockResolvedValueOnce({
       scan: makeScan({ status: 'needs_recapture' }),
@@ -162,5 +184,30 @@ describe('ApprovalPanel', () => {
     expect(screen.getByText('Reviewed')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/approver id/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no final count for a rejected count', () => {
+    render(
+      <ApprovalPanel
+        scan={makeScan({ status: 'needs_recapture', agent_count: 12, approved_by: 'MGR-1' })}
+      />
+    );
+
+    expect(screen.getByText('Final count').nextElementSibling).toHaveTextContent('—');
+  });
+
+  it('shows no final count for a photo nothing counted', () => {
+    render(
+      <ApprovalPanel
+        scan={makeScan({
+          status: 'needs_recapture',
+          agent_decision: 'request_recapture',
+          agent_count: null,
+          final_count: 0,
+        })}
+      />
+    );
+
+    expect(screen.getByText('Final count').nextElementSibling).toHaveTextContent('—');
   });
 });

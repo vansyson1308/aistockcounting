@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import progress
-from app.agent.service import agent_payload, mark_approved, run_for_scan
+from app.agent.service import (
+    agent_payload,
+    claim_is_fresh,
+    close_open_discrepancies,
+    mark_approved,
+    run_for_scan,
+)
 from app.api.routes.truth import (
     _discrepancy_payload,
     _record_event,
@@ -32,10 +40,12 @@ from app.schemas.agent import (
 from app.services.inference import InferenceService
 from app.services.storage import StorageService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Agent"])
 
 # Statuses the agent may (re-)run from. It may never run over a pending human
-# decision or over a human's final decision.
+# decision or over a human's final decision (approved_by, or a human review;
+# see _human_reviewed).
 RUNNABLE = {"pending_review", "needs_recapture", "agent_running", "discrepancy_open"}
 
 
@@ -62,6 +72,16 @@ async def _open_discrepancy(db: AsyncSession, scan_id: UUID) -> Discrepancy | No
     ).scalar_one_or_none()
 
 
+def _human_reviewed(scan: ScanSession) -> bool:
+    """True once a human entered a count through PATCH /review.
+
+    That review can leave the scan in ``discrepancy_open``, a status the agent
+    may otherwise run from (legacy single-shot scans), so the status alone
+    does not tell whether the count is a human's final decision.
+    """
+    return scan.manual_count is not None or scan.reviewed_at is not None
+
+
 def evidence_url(key: str | None) -> str | None:
     if not key:
         return None
@@ -81,16 +101,83 @@ async def agent_run(
     inference: InferenceService = Depends(InferenceService),
 ) -> AgentRunResponse:
     scan = await _load_scan(db, scan_id, tenant)
-    if scan.status not in RUNNABLE or scan.approved_by is not None:
+    if scan.status not in RUNNABLE:
         raise api_error(
             409,
             "AGENT_RUN_NOT_ALLOWED",
             f"Scan status '{scan.status}' cannot be re-run by the agent.",
         )
-    result = await run_for_scan(
-        db, scan, detector=inference.detector(), storage=storage
+    if scan.approved_by is not None or _human_reviewed(scan):
+        raise api_error(
+            409,
+            "AGENT_RUN_NOT_ALLOWED",
+            "A human already decided this scan's count; the agent cannot re-run it.",
+        )
+    if claim_is_fresh(scan):
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is already counting this scan; wait for it to finish.",
+        )
+    # Claim the scan before the (slow) run. The claim is a compare-and-set on
+    # the version read above, so it fails if a human (or another run) changed
+    # the scan in between; while it is held, reviews and resolutions are
+    # refused. Every later ORM write checks the version too, so whichever of
+    # a run and a human write commits second fails instead of overwriting.
+    previous_status = scan.status
+    claimed = await db.execute(
+        update(ScanSession)
+        .where(ScanSession.id == scan.id, ScanSession.version == scan.version)
+        .values(
+            status="agent_running",
+            updated_at=datetime.utcnow(),
+            version=ScanSession.version + 1,
+        )
+        .execution_options(synchronize_session=False)
     )
+    if claimed.rowcount != 1:
+        await db.rollback()
+        raise api_error(
+            409,
+            "SCAN_CHANGED",
+            "The scan changed before the agent could start; reload it.",
+        )
     await db.commit()
+    invalidate()  # cached views show the scan as being counted
+    await db.refresh(scan)
+    claim_version = scan.version
+    try:
+        result = await run_for_scan(
+            db, scan, detector=inference.detector(), storage=storage
+        )
+        await db.commit()
+    except BaseException:
+        # Release the claim (only if still ours) so the scan can be reviewed
+        # by hand or re-run; a claim that cannot be released goes stale.
+        await db.rollback()
+        try:
+            await db.execute(
+                update(ScanSession)
+                .where(
+                    ScanSession.id == scan_id,
+                    ScanSession.version == claim_version,
+                    ScanSession.status == "agent_running",
+                )
+                .values(
+                    status=(
+                        "pending_review"
+                        if previous_status == "agent_running"
+                        else previous_status
+                    ),
+                    version=ScanSession.version + 1,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            await db.commit()
+            invalidate()
+        except Exception:
+            logger.warning("could not release the agent claim on %s", scan_id)
+        raise
     await db.refresh(scan)
     discrepancy = await _open_discrepancy(db, scan.id)
     invalidate()
@@ -179,25 +266,33 @@ async def approve_scan(
             "NOT_AWAITING_APPROVAL",
             f"Scan status is '{scan.status}'; only escalated scans can be approved.",
         )
+    if payload.decision == "approve" and scan.agent_count is None:
+        # The agent escalated before it produced a count (e.g. the planner
+        # escalated right after assess, or the budget ran out): there is no
+        # agent count to approve, and approving must never record a stale or
+        # default number.
+        raise api_error(
+            409,
+            "NO_AGENT_COUNT",
+            "The agent produced no count for this scan; correct it or reject it.",
+        )
     before = {"agent_count": scan.agent_count, "final_count": scan.final_count}
     if payload.decision == "reject":
         scan.status = "needs_recapture"
         scan.notes = payload.note
         mark_approved(scan, payload.approver_id)
-        discrepancy = await _open_discrepancy(db, scan.id)
-        if discrepancy is not None:
-            discrepancy.status = "ignored"
-            discrepancy.resolution_note = (
-                "Agent count rejected by a human; recount required."
-            )
-            discrepancy.resolved_by = payload.approver_id
+        closed = await close_open_discrepancies(
+            db,
+            scan,
+            "Agent count rejected by a human; recount required.",
+            by=payload.approver_id,
+        )
+        discrepancy = closed[0] if closed else None
     else:
         count = (
             payload.corrected_count
             if payload.decision == "correct"
-            else (
-                scan.agent_count if scan.agent_count is not None else scan.final_count
-            )
+            else scan.agent_count
         )
         scan.final_count = int(count)
         if payload.decision == "correct":
@@ -213,6 +308,8 @@ async def approve_scan(
         )
         mark_approved(scan, payload.approver_id)
         if scan.expected_count is None:
+            if payload.unit_value is not None:
+                scan.unit_value = payload.unit_value  # for a later POS figure
             scan.status = "reviewed"
             discrepancy = None
         else:

@@ -87,6 +87,10 @@ class ScanSession(Base):
     expected_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     variance_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     variance_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Unit value used for variance_value (form input, POS snapshot or tray
+    # master), kept so later counts (agent re-run, approval, review) price the
+    # variance from the same figure.
+    unit_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence_avg: Mapped[float | None] = mapped_column(Float, nullable=True)
     boxes_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -107,10 +111,25 @@ class ScanSession(Base):
     agent_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    # Set by PATCH /review: a human's count is final, the agent never re-runs over it.
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(), server_default=func.now())
+    # Set by the app in UTC (not the database's now(), whose time zone is the
+    # server's): the agent claim's freshness is judged against utcnow().
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(), server_default=func.now(), onupdate=func.now()
+        DateTime(),
+        server_default=func.now(),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
     )
+    # Optimistic lock: every ORM update checks and bumps it, so a write based
+    # on a stale read (a review racing an agent run, or two runs) fails with
+    # StaleDataError (409 SCAN_CHANGED) instead of overwriting the other one.
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
 
 class Discrepancy(Base):

@@ -9,8 +9,24 @@ from botocore.response import StreamingBody
 from PIL import Image
 
 from app.core.config import get_settings
+from app.utils.image_validation import JPEG_MAGIC, PNG_MAGIC
 
 logger = logging.getLogger(__name__)
+
+
+def _image_ext(image_bytes: bytes, filename: str) -> str:
+    """Extension for the stored object, from the bytes first.
+
+    The upload may have been re-encoded (face blur writes JPEG), so the
+    client's filename can disagree with the bytes; the key and ContentType
+    must describe what is actually stored.
+    """
+    if image_bytes.startswith(PNG_MAGIC):
+        return ".png"
+    if image_bytes.startswith(JPEG_MAGIC):
+        return ".jpg"
+    ext = Path(filename).suffix.lower()
+    return ext if ext in {".jpg", ".jpeg", ".png"} else ".jpg"
 
 
 class StorageService:
@@ -79,9 +95,7 @@ class StorageService:
     ) -> tuple[str, str | None]:
         self.ensure_bucket()
 
-        ext = Path(filename).suffix.lower()
-        if ext not in {".jpg", ".jpeg", ".png"}:
-            ext = ".jpg"
+        ext = _image_ext(image_bytes, filename)
 
         object_key = f"uploads/{uuid.uuid4().hex}{ext}"
         content_type = "image/png" if ext == ".png" else "image/jpeg"

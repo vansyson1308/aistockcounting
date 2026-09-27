@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { statusLabel } from '@/lib/agent-format';
+import { knownFinalCount, statusLabel } from '@/lib/agent-format';
 import { ApiClientError, approveScan } from '@/lib/api';
 import { sanitizeText } from '@/lib/sanitize';
 import { useSessionStore } from '@/store/useSessionStore';
@@ -34,7 +34,7 @@ function FinalDecision({ scan }: { scan: ScanSession }) {
       </div>
       <div>
         <dt className="text-slate-600 dark:text-slate-400">Final count</dt>
-        <dd className="font-semibold tabular-nums">{scan.final_count}</dd>
+        <dd className="font-semibold tabular-nums">{knownFinalCount(scan) ?? '—'}</dd>
       </div>
       <div>
         <dt className="text-slate-600 dark:text-slate-400">Decided by</dt>
@@ -81,7 +81,9 @@ export default function ApprovalPanel({ scan, onDecided }: Props) {
   }, [staffId]);
 
   const awaiting = scan.status === 'awaiting_approval';
-  const agentCount = scan.agent_count ?? scan.final_count;
+  // null when the agent escalated before it counted: nothing to approve, only
+  // correct or reject (the API refuses 'approve' in that case).
+  const agentCount = scan.agent_count ?? null;
 
   const submit = async (decision: ApproveDecision) => {
     setApiError('');
@@ -195,10 +197,14 @@ export default function ApprovalPanel({ scan, onDecided }: Props) {
           <button
             type="button"
             onClick={() => submit('approve')}
-            disabled={submitting !== null}
+            disabled={submitting !== null || agentCount === null}
             className={`w-full rounded-lg bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
           >
-            {submitting === 'approve' ? 'Saving…' : `Approve agent count (${agentCount})`}
+            {submitting === 'approve'
+              ? 'Saving…'
+              : agentCount === null
+                ? 'No agent count to approve: correct or reject it'
+                : `Approve agent count (${agentCount})`}
           </button>
 
           <fieldset className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">

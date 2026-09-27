@@ -43,7 +43,11 @@ class PolicyConfig:
     blur_min: float = 60.0
     glare_severe: float = 0.08
     glare_mild: float = 0.01
-    max_recaptures: int = 1
+    max_recaptures: int = 1  # glare / low light: a re-shot rarely helps twice
+    # blur / tray not in frame: a steadier or closer photo usually fixes it,
+    # but not forever. After this many re-shots the agent counts what it has
+    # and escalates (the image stays "degraded", so it cannot auto-accept).
+    max_hard_recaptures: int = 2
     dense_count: int = 60
     small_box_frac: float = 0.0006
     crowding_max: float = 0.35
@@ -123,6 +127,9 @@ class Observation:
             (self.glare_ratio or 0.0) > cfg.glare_severe
             or self.low_light
             or (self.blur_var is not None and self.blur_var < cfg.blur_min)
+            or (
+                self.tray_coverage is not None and self.tray_coverage < cfg.coverage_min
+            )
         )
 
 
@@ -149,10 +156,11 @@ def can_auto_accept(obs: Observation, cfg: PolicyConfig) -> bool:
 def recapture_reason(obs: Observation, cfg: PolicyConfig) -> str | None:
     if not obs.assessed:
         return None
-    if (obs.tray_coverage or 0.0) < cfg.coverage_min:
-        return "tray_not_in_frame"
-    if obs.blur_var is not None and obs.blur_var < cfg.blur_min:
-        return "blur"
+    if obs.attempt < cfg.max_hard_recaptures:
+        if (obs.tray_coverage or 0.0) < cfg.coverage_min:
+            return "tray_not_in_frame"
+        if obs.blur_var is not None and obs.blur_var < cfg.blur_min:
+            return "blur"
     if obs.attempt < cfg.max_recaptures:
         if (obs.glare_ratio or 0.0) > cfg.glare_severe:
             return "glare"

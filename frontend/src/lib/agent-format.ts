@@ -1,4 +1,30 @@
-import { AgentDecision, TraceStep } from '@/types';
+import { AgentDecision, ScanSession, TraceStep } from '@/types';
+
+/**
+ * The scan's final count, or null when nothing counted the photo. The API
+ * stores 0 in final_count until something counts it, so 0 alone is not a
+ * count: it is one only if a human entered it, the agent produced it, or a
+ * single-shot detector pass (from before the agent) ran on the photo. A
+ * rejected or retaken photo has no accepted count, whatever it still stores.
+ */
+export function knownFinalCount(
+  scan: Pick<
+    ScanSession,
+    | 'final_count'
+    | 'manual_count'
+    | 'agent_count'
+    | 'agent_decision'
+    | 'processing_time_ms'
+    | 'status'
+  >
+): number | null {
+  if (scan.status === 'needs_recapture' || scan.status === 'superseded') return null;
+  const counted =
+    (scan.manual_count ?? null) !== null ||
+    (scan.agent_count ?? null) !== null ||
+    (!scan.agent_decision && (scan.processing_time_ms ?? null) !== null);
+  return counted ? scan.final_count : null;
+}
 
 export const TOOL_LABELS: Record<string, string> = {
   assess_quality: 'Check photo quality',

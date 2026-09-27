@@ -6,9 +6,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.service import claim_is_fresh
 from app.core.audit import audit_log
 from app.core.cache import invalidate
 from app.core.config import get_settings
@@ -81,6 +82,7 @@ def _scan_payload(row: ScanSession) -> dict:
         "expected_count": row.expected_count,
         "variance_count": row.variance_count,
         "variance_value": row.variance_value,
+        "unit_value": row.unit_value,
         "confidence_avg": row.confidence_avg,
         "boxes_json": row.boxes_json or [],
         "quality_score": row.quality_score,
@@ -185,14 +187,46 @@ async def _expected_from_pos_or_tray(
     return None, None
 
 
+def _machine_count(scan: ScanSession) -> int | None:
+    """The count the detector or the agent produced for this photo, if any."""
+    if scan.agent_run_id is not None:
+        return scan.agent_count
+    if scan.boxes_json is None:  # deferred scan, never counted
+        return None
+    return scan.detected_count
+
+
 async def _upsert_discrepancy(
     db: AsyncSession,
     scan: ScanSession,
     *,
     unit_value: float | None,
 ) -> Discrepancy | None:
+    # A unit value given with this call wins and is kept on the scan, even when
+    # there is nothing to price yet (no POS figure): a later count uses it.
+    if unit_value is not None:
+        scan.unit_value = unit_value
     if scan.expected_count is None or scan.variance_count is None:
         return None
+
+    # Price the variance from the count that is current now, with the stored
+    # unit value. The previous variance_value is never reused: it belongs to
+    # an older count (agent count before a correction). A scan with no stored
+    # unit value (e.g. created before it was stored) takes the POS snapshot or
+    # tray master value, as a new scan would; with neither, the money value is
+    # unknown rather than stale.
+    if scan.unit_value is None:
+        _, scan.unit_value = await _expected_from_pos_or_tray(
+            db,
+            tenant=scan.tenant_key,
+            branch_code=scan.branch_code,
+            tray_code=scan.tray_code,
+        )
+    unit = scan.unit_value
+    variance_value = (
+        float(scan.variance_count) * float(unit) if unit is not None else None
+    )
+    scan.variance_value = variance_value
 
     existing = (
         await db.execute(
@@ -212,12 +246,6 @@ async def _upsert_discrepancy(
             existing.resolved_at = datetime.utcnow()
         return None
 
-    variance_value = (
-        float(scan.variance_count) * float(unit_value)
-        if unit_value is not None
-        else scan.variance_value
-    )
-    scan.variance_value = variance_value
     scan.status = "discrepancy_open"
 
     if existing is None:
@@ -301,8 +329,26 @@ async def create_scan(
         if parent is None:
             raise api_error(404, "PARENT_SCAN_NOT_FOUND", "Parent scan not found")
         attempt = (parent.attempt or 0) + 1
-        if parent.status == "needs_recapture":
-            parent.status = "superseded"
+        # Supersede the parent only if it still waits for this re-shot. A
+        # conditional update, not a version-checked write of the loaded row:
+        # a concurrent change to the parent must not fail this upload.
+        await db.execute(
+            update(ScanSession)
+            .where(
+                ScanSession.id == parent.id,
+                # agent_running: a re-run of the parent is in flight; its
+                # write then fails on the version and the retake stands
+                ScanSession.status.in_(("needs_recapture", "agent_running")),
+                ScanSession.reviewed_at.is_(None),  # a human count stands
+            )
+            .values(
+                status="superseded",
+                updated_at=datetime.utcnow(),
+                version=ScanSession.version + 1,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        db.expunge(parent)
 
     if settings.agent_enabled and run_agent:
         from app.agent.service import agent_payload, run_for_scan
@@ -315,6 +361,7 @@ async def create_scan(
             image_path=image_path,
             image_thumbnail=image_thumbnail,
             expected_count=final_expected,
+            unit_value=final_unit_value,
             parent_scan_id=parent_scan_id,
             attempt=attempt,
             status="agent_running",
@@ -376,6 +423,7 @@ async def create_scan(
             image_path=image_path,
             image_thumbnail=image_thumbnail,
             expected_count=final_expected,
+            unit_value=final_unit_value,
             parent_scan_id=parent_scan_id,
             attempt=attempt,
             status="pending_review",
@@ -427,6 +475,7 @@ async def create_scan(
         expected_count=final_expected,
         variance_count=variance_count,
         variance_value=variance_value,
+        unit_value=final_unit_value,
         confidence_avg=detection.get("confidence_avg"),
         boxes_json=detection.get("boxes", []),
         quality_score=quality.score,
@@ -494,12 +543,47 @@ async def review_scan(
             "APPROVAL_REQUIRED",
             "This scan was escalated by the agent; use POST /scans/{id}/approve.",
         )
+    if claim_is_fresh(scan):
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is counting this scan; wait for it to finish.",
+        )
+    if scan.status == "superseded" or (
+        scan.status == "needs_recapture" and scan.approved_by is not None
+    ):
+        # A rejected or retaken photo is closed: reviewing it would make it a
+        # "reviewed" scan again, and a comparison reference for the next scan.
+        raise api_error(
+            409,
+            "SCAN_CLOSED",
+            "This photo was rejected or retaken; review the retaken scan instead.",
+        )
 
     if payload.manual_count is not None:
         scan.manual_count = payload.manual_count
         scan.final_count = payload.manual_count
+    elif scan.manual_count is not None:
+        # An earlier human count (review or approval correction) stands; this
+        # review only adds a POS figure, a unit value or notes.
+        scan.final_count = scan.manual_count
     else:
-        scan.final_count = scan.detected_count
+        machine = _machine_count(scan)
+        if machine is None:
+            # Nothing counted this photo (deferred scan never run, or the agent
+            # asked for a re-shot / escalated before counting): its stored
+            # final_count is a placeholder 0, never a count to record.
+            raise api_error(
+                422,
+                "MANUAL_COUNT_REQUIRED",
+                "No machine count exists for this scan; enter the counted quantity.",
+            )
+        scan.final_count = machine
+    scan.reviewed_at = datetime.utcnow()
+    if scan.status == "agent_running":
+        # Only reachable once the claim went stale (the run died): the human
+        # review takes the scan over, so it must not stay "agent_running".
+        scan.status = "pending_review"
     if payload.expected_count is not None:
         scan.expected_count = payload.expected_count
     scan.is_ai_correct = payload.is_ai_correct
@@ -509,13 +593,14 @@ async def review_scan(
         if scan.expected_count is not None
         else None
     )
-    scan.variance_value = (
-        float(scan.variance_count) * float(payload.unit_value)
-        if scan.variance_count is not None and payload.unit_value is not None
-        else scan.variance_value
-    )
+    if scan.variance_count is None:
+        scan.variance_value = None
 
     discrepancy = await _upsert_discrepancy(db, scan, unit_value=payload.unit_value)
+    if scan.expected_count is None:
+        # No POS figure to reconcile: the human's count is the decision, so the
+        # scan no longer waits (for a re-shot, a review or the agent).
+        scan.status = "reviewed"
     await _record_event(
         db,
         tenant=tenant,
@@ -590,6 +675,15 @@ async def resolve_discrepancy(
     ).scalar_one_or_none()
     if discrepancy is None:
         raise api_error(404, "DISCREPANCY_NOT_FOUND", "Discrepancy not found")
+    if discrepancy.status != "open":
+        # Closed ones (resolved, or ignored by a rejection or a no-count
+        # re-run) stay closed: resolving again would reopen a rejected photo
+        # as a "reviewed" scan and a comparison reference.
+        raise api_error(
+            409,
+            "DISCREPANCY_CLOSED",
+            f"This discrepancy is already '{discrepancy.status}'.",
+        )
 
     gated_scan = (
         await db.execute(
@@ -602,6 +696,12 @@ async def resolve_discrepancy(
             "APPROVAL_REQUIRED",
             "The scan behind this discrepancy awaits human approval of its count first.",
         )
+    if gated_scan is not None and claim_is_fresh(gated_scan):
+        raise api_error(
+            409,
+            "AGENT_RUNNING",
+            "The agent is recounting the scan behind this discrepancy; wait for it.",
+        )
 
     discrepancy.status = payload.status
     discrepancy.resolution_note = payload.resolution_note
@@ -612,7 +712,10 @@ async def resolve_discrepancy(
             select(ScanSession).where(ScanSession.id == discrepancy.scan_id)
         )
     ).scalar_one_or_none()
-    if scan is not None:
+    if scan is not None and scan.status not in ("needs_recapture", "superseded"):
+        # A discrepancy left open on a rejected or retaken photo (by a run
+        # before the no-count fix) is closed, but the photo stays closed:
+        # it must not become a "reviewed" comparison reference.
         scan.status = "reviewed" if payload.status == "resolved" else "ignored"
 
     await _record_event(

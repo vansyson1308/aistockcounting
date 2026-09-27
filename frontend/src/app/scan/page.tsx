@@ -24,7 +24,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { useReviewQueueStore } from '@/store/useReviewQueueStore';
 import { useSessionStore } from '@/store/useSessionStore';
 import { useToastStore } from '@/store/useToastStore';
-import { ScanCreateData, TraceStep } from '@/types';
+import { ScanCreateData, ScanSession, TraceStep } from '@/types';
 
 const POLL_INTERVAL_MS = 400;
 
@@ -44,6 +44,13 @@ function parseOptionalNumber(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Pre-fill for the manual count: the agent's count, never a placeholder. */
+function countField(scan: Pick<ScanSession, 'agent_count'>): string {
+  return scan.agent_count === null || scan.agent_count === undefined
+    ? ''
+    : String(scan.agent_count);
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -125,7 +132,9 @@ export default function ScanPage() {
   const terminal = useMemo(() => terminalStep(steps), [steps]);
   const reason =
     agent?.instruction || agent?.reason || terminal?.reason || scan?.agent_reason || '';
-  const agentCount = agent?.count ?? scan?.agent_count ?? scan?.final_count ?? null;
+  // final_count is a placeholder 0 when the agent did not count: never show it
+  // as the agent's count.
+  const agentCount = agent?.count ?? scan?.agent_count ?? null;
   const busy = phase === 'uploading' || phase === 'running';
   const displaySrc = preview || buildImageUrl(scan?.image_path);
   const showManualReview =
@@ -235,7 +244,7 @@ export default function ScanPage() {
       });
       scanId = created.scan.id;
       setResult(created);
-      setManualCount(String(created.scan.final_count));
+      setManualCount(countField(created.scan));
       setPhase('running');
       setStatus('TrayAgent is checking the photo…');
 
@@ -244,7 +253,7 @@ export default function ScanPage() {
       stopPolling();
       if (data.agent?.trace?.length) setSteps(data.agent.trace);
       setResult(data);
-      setManualCount(String(data.scan.final_count));
+      setManualCount(countField(data.scan));
       setRetake(null);
       setPhase('done');
 
@@ -270,12 +279,30 @@ export default function ScanPage() {
 
   const submitReview = async () => {
     if (!scan) return;
+    const counted = parseOptionalNumber(manualCount);
+    if (counted === null || !Number.isInteger(counted) || counted < 0) {
+      // No agent count to fall back on: the stored final_count of an uncounted
+      // scan is only a placeholder 0, never a count to record.
+      setError('Enter the number of items you counted on the tray.');
+      return;
+    }
+    if (decision === null) {
+      // The agent run this page lost track of may have finished since (e.g.
+      // it asked for a re-shot or escalated): show that instead of saving
+      // a manual count over it.
+      const recovered = await recoverFromTrace(scan.id);
+      if (recovered) {
+        setError('');
+        setRetake(null); // the lost run's scan is the latest in the chain
+        announceOutcome(recovered);
+        return;
+      }
+    }
     try {
       setReviewing(true);
       setError('');
       const data = await reviewAuditScan(scan.id, {
-        manual_count:
-          manualCount.trim() !== '' ? parseOptionalNumber(manualCount) : scan.final_count,
+        manual_count: counted,
         expected_count: parseOptionalNumber(expectedCount) ?? scan.expected_count ?? null,
         unit_value: parseOptionalNumber(unitValue),
         is_ai_correct: isAICorrect,
@@ -287,6 +314,46 @@ export default function ScanPage() {
         data.discrepancy ? 'The discrepancy is still open.' : 'The scan matches the expected count.'
       );
     } catch (err) {
+      if (
+        err instanceof ApiClientError &&
+        (err.code === 'AGENT_RUNNING' ||
+          err.code === 'SCAN_CHANGED' ||
+          err.code === 'APPROVAL_REQUIRED')
+      ) {
+        // The agent run this page lost track of is still going (or just
+        // finished): show its result instead of the manual form.
+        const recovered = await recoverFromTrace(scan.id);
+        if (recovered) {
+          setError('');
+          setRetake(null);
+          announceOutcome(recovered);
+          return;
+        }
+        if (err.code === 'AGENT_RUNNING') {
+          setError('TrayAgent is still counting this tray. Wait a few seconds, then save again.');
+          return;
+        }
+        // Someone else saved this scan first: show their count next to this
+        // person's (kept in the field) before they decide to save over it.
+        let theirs = '';
+        try {
+          const latest = await getTrace(scan.id);
+          setResult((prev) => ({
+            scan: latest.scan,
+            discrepancy: prev?.discrepancy ?? null,
+            agent: prev?.agent ?? null,
+          }));
+          if (latest.scan.manual_count != null) {
+            theirs = ` Their count: ${latest.scan.manual_count}.`;
+          }
+        } catch {
+          // keep the form as it is; the message below still applies
+        }
+        setError(
+          `Someone else updated this scan while you were reviewing it.${theirs} Check the tray, then save again to record your count.`
+        );
+        return;
+      }
       setError(errorMessage(err, 'Could not save the review.'));
     } finally {
       setReviewing(false);

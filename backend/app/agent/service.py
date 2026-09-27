@@ -18,11 +18,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
-from sqlalchemy import desc, or_, select
+from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import progress
@@ -34,13 +34,32 @@ from app.agent.trace import persist_run
 from app.core.config import get_settings
 from app.core.metrics import agent_latency_seconds, agent_runs_total, agent_steps_used
 from app.cv.imageio import decode_image
-from app.models.truth import ScanSession
+from app.models.truth import Discrepancy, ScanSession
 from app.services.detector_cv import Detector
 from app.services.storage import StorageService
 
 logger = logging.getLogger("app")
 
 GATED_STATUSES = {"awaiting_approval"}
+# A human rejected the count (or the re-shot that followed replaced it).
+REJECTED_STATUSES = ("needs_recapture", "superseded")
+# Quality flags that make a photo unfit as a comparison reference, and how
+# many recent approved scans to look through for one that is fit.
+UNFIT_REFERENCE_FLAGS = frozenset({"blurry", "tray_not_found"})
+REFERENCE_CANDIDATES = 10
+# An agent_running claim older than this is from a run that died (worker
+# killed, restart): the scan may be re-run or reviewed by hand again. Runs
+# are capped far below it (policy time budget).
+CLAIM_STALE_AFTER = timedelta(minutes=5)
+
+
+def claim_is_fresh(scan: ScanSession, now: datetime | None = None) -> bool:
+    """True while an agent run holds this scan."""
+    if scan.status != "agent_running":
+        return False
+    if scan.updated_at is None:
+        return True
+    return scan.updated_at > (now or datetime.utcnow()) - CLAIM_STALE_AFTER
 
 
 class S3EvidenceStore:
@@ -55,21 +74,43 @@ async def previous_approved_scan(
     db: AsyncSession, scan: ScanSession
 ) -> ScanSession | None:
     """The latest earlier scan of the same tray that a human approved or that
-    auto-accepted against POS: 'yesterday's approved photo'."""
+    auto-accepted against POS: 'yesterday's approved photo'.
+
+    ``approved_by`` is also set when a human *rejects* an escalated count
+    (the scan goes back to ``needs_recapture``, then ``superseded``), so those
+    statuses are excluded: a rejected photo is not a reference. Nor is a
+    photo the agent asked to retake, even if a human then counted the tray
+    by hand, or one it counted only because the re-shot cap was reached
+    (still blurry or tray out of frame): the count may stand, the image is
+    not fit to compare against.
+    """
     q = (
         select(ScanSession)
         .where(
             ScanSession.tenant_key == scan.tenant_key,
             ScanSession.tray_code == scan.tray_code,
             ScanSession.id != scan.id,
-            or_(ScanSession.status == "reviewed", ScanSession.approved_by.is_not(None)),
+            or_(
+                ScanSession.agent_decision.is_(None),
+                ScanSession.agent_decision != "request_recapture",
+            ),
+            or_(
+                ScanSession.status == "reviewed",
+                and_(
+                    ScanSession.approved_by.is_not(None),
+                    ScanSession.status.not_in(REJECTED_STATUSES),
+                ),
+            ),
         )
         .order_by(desc(ScanSession.created_at))
-        .limit(1)
+        .limit(REFERENCE_CANDIDATES)
     )
     if scan.created_at is not None:
         q = q.where(ScanSession.created_at <= scan.created_at)
-    return (await db.execute(q)).scalar_one_or_none()
+    for candidate in (await db.execute(q)).scalars():
+        if not UNFIT_REFERENCE_FLAGS & set(candidate.quality_flags or ()):
+            return candidate
+    return None
 
 
 def policy_from_settings() -> PolicyConfig:
@@ -130,12 +171,31 @@ async def run_for_scan(
             evidence=evidence or S3EvidenceStore(storage),
             key_prefix=f"evidence/{scan.id.hex}/{run_id.hex}",
             run_id=run_id,
-            on_step=lambda e: progress.add_step(scan_key, e.as_dict()),
+            on_step=lambda e: progress.add_step(scan_key, e.as_dict(), str(run_id)),
         )
     finally:
-        progress.finish(scan_key)
+        progress.finish(scan_key, str(run_id))
 
+    # What this run replaces, kept in the audit trail: a run that produces no
+    # count clears these on the scan. An earlier agent run's boxes are already
+    # in agent_steps (by run id); a legacy single-shot count's are not.
+    before = {
+        "agent_run_id": str(scan.agent_run_id) if scan.agent_run_id else None,
+        "detected_count": scan.detected_count,
+        "final_count": scan.final_count,
+        "variance_count": scan.variance_count,
+        "variance_value": scan.variance_value,
+    }
+    if scan.agent_run_id is None and scan.boxes_json:
+        before["boxes"] = scan.boxes_json
     apply_result(scan, result)
+    if result.count is None:
+        # This run produced no count (re-shot requested, or escalated before
+        # counting). A count and an open discrepancy left by an earlier run on
+        # the same scan no longer describe it.
+        await close_open_discrepancies(
+            db, scan, "Superseded: a new agent run produced no count."
+        )
     if result.action == Action.REQUEST_RECAPTURE:
         scan.status = "needs_recapture"
     elif result.action == Action.AUTO_ACCEPT:
@@ -145,6 +205,13 @@ async def run_for_scan(
             )  # variance 0 -> reviewed
         else:
             scan.status = "pending_review"
+    elif scan.variance_count == 0:
+        # Escalated although the count matches POS: an open discrepancy from
+        # an earlier count stays open until the approver decides (approve
+        # resolves it, reject closes it); _upsert_discrepancy would
+        # auto-resolve it on a count nobody accepted yet.
+        scan.variance_value = 0.0
+        scan.status = "awaiting_approval"
     else:
         await _upsert_discrepancy(db, scan, unit_value=unit_value)
         scan.status = "awaiting_approval"
@@ -163,6 +230,8 @@ async def run_for_scan(
             "run_id": str(run_id),
             "decision": result.action.value,
             "status": scan.status,
+            "count": result.count,
+            "before": before,
         },
     )
     summary = result.summary()
@@ -187,6 +256,15 @@ def apply_result(scan: ScanSession, result: AgentResult) -> None:
         scan.quality_score = quality.get("score")
         scan.quality_flags = quality.get("flags")
     if result.count is None:
+        # No count from this run: clear what an earlier run recorded, so the
+        # scan does not show a count, boxes or variance that no longer apply.
+        scan.detected_count = 0
+        scan.final_count = 0
+        scan.boxes_json = []
+        scan.confidence_avg = None
+        scan.variance_count = None
+        scan.variance_value = None
+        scan.processing_time_ms = result.elapsed_ms
         return
     boxes = [d.as_dict() for d in result.dets_original]
     scan.detected_count = result.count
@@ -198,6 +276,24 @@ def apply_result(scan: ScanSession, result: AgentResult) -> None:
     scan.processing_time_ms = result.elapsed_ms
     if scan.expected_count is not None:
         scan.variance_count = result.count - scan.expected_count
+
+
+async def close_open_discrepancies(
+    db: AsyncSession, scan: ScanSession, note: str, *, by: str = "trayagent"
+) -> list[Discrepancy]:
+    """Close the scan's open discrepancies as 'ignored' (no longer valid)."""
+    result = await db.execute(
+        select(Discrepancy).where(
+            Discrepancy.scan_id == scan.id, Discrepancy.status == "open"
+        )
+    )
+    rows = list(result.scalars())
+    for discrepancy in rows:
+        discrepancy.status = "ignored"
+        discrepancy.resolution_note = note
+        discrepancy.resolved_by = by
+        discrepancy.resolved_at = datetime.utcnow()
+    return rows
 
 
 def agent_payload(
