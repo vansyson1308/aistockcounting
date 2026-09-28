@@ -1,0 +1,9 @@
+# Cloud (Kaggle / HF Jobs) runtime deps for ml.gate0a.cloud — on top of
+# ml/requirements-dev.txt. torch/torchvision are taken from the runtime image
+# (Kaggle ships CUDA builds); they are NOT pinned here on purpose.
+-r ../../requirements-dev.txt
+transformers>=4.53,<6          # Apache-2.0 — D-FINE / RT-DETRv2 inference
+huggingface_hub>=0.34          # Apache-2.0 — gated dataset access, selective download
+opencv-python-headless>=4.9    # Apache-2.0 — video decode, crops
+matplotlib>=3.8                # PSF-based — px-height recall plot
+pyyaml>=6                      # MIT

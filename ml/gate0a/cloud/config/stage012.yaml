@@ -1,0 +1,92 @@
+# Runtime configuration for Gate 0A cloud Stage 0+1+2 (Kaggle / HF Jobs).
+# Scientific criteria live in ../diagnostic_contract.yaml (frozen); this file
+# holds engineering knobs. Every value is copied into artifact_manifest.json.
+dataset:
+  repo_id: atomscott/soccertrack-v2
+  repo_type: dataset
+  revision: main                 # resolved to a commit sha at Stage 0
+  match_id: "118578"
+  half: "1st"
+  half_tokens: ["1st", "first", "half1", "half_1", "h1"]
+  video_exts: [".mp4", ".mkv", ".mov", ".avi"]
+
+gt:
+  drop_ignore_rows: true
+  ignore_suppress_iou: 0.5
+
+windows:
+  fps_expected: 25
+  clip_seconds: 180              # OPEN / DENSE / FAR
+  tune_seconds: 75
+  candidate_stride_seconds: 10
+  crowd_iou: 0.15
+  open_min_population_ratio: 0.9 # OPEN candidates need >= this × median GT count
+
+detector:
+  primary:
+    name: dfine-large-coco
+    hf_id: ustc-community/dfine-large-coco
+    code_license: Apache-2.0
+    weights_note: COCO-2017 trained (model card); HGNetV2 backbone ImageNet-pretrained
+    provenance_class: RESEARCH-DIAGNOSTIC
+  fallback:
+    name: rtdetr-v2-r50vd
+    hf_id: PekingU/rtdetr_v2_r50vd
+    code_license: Apache-2.0
+    weights_note: COCO-2017 trained (model card); ResNet-50-vd backbone ImageNet-pretrained
+    provenance_class: RESEARCH-DIAGNOSTIC
+  person_label: person
+  score_floor: 0.05
+  tile_px: 896
+  overlap_px: 128
+  model_input_px: 640
+  batch_tiles: 12
+  fp16: true
+  nms_iou: 0.6
+  max_frame_side: 8192
+
+reid:
+  primary:
+    name: torchvision-resnet50-imagenet
+    arch: resnet50
+    weights: IMAGENET1K_V2
+    code_license: BSD-3-Clause
+    provenance_class: RESEARCH-DIAGNOSTIC   # ImageNet-derived weights; product retrains
+  secondary:
+    enabled: false
+    name: osnet_x1_0-imagenet-torchreid
+    code_license: MIT
+    provenance_class: RESEARCH-DIAGNOSTIC
+  crop_hw: [256, 128]
+  batch_size: 128
+  store_dtype: float16
+
+tracker:
+  high_score: 0.5
+  low_score: 0.1
+  iou_gate: 0.2
+  n_init: 3
+  max_age: 30
+  appearance_weight: 0.25
+  ambiguity_margin_grid: [0.0, 0.03, 0.05, 0.10, 0.15]
+  ambiguity_terminate: true
+
+offline:
+  split_eps: 0.35
+  merge_max_cost: 0.35
+  max_gap_frames: 250
+  max_speed_px: 12.0
+  reach_slack_px: 60.0
+  require_team_match: true
+
+reid_diag:
+  deltas_frames: [25, 125]       # 1 s and 5 s at 25 fps
+  max_queries: 4000
+
+seeds:
+  global: 0
+
+storage:
+  export_clips: true             # best-effort ffmpeg export of the frozen windows
+  delete_source_after_pass: false
+  hf_cache_subdir: hf

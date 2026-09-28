@@ -1,0 +1,15 @@
+{
+  "id": "KAGGLE_USERNAME/gate0a-stage012-soccertrack-v2",
+  "title": "Gate 0A cloud Stage 0+1+2 (SoccerTrack v2, diagnostic)",
+  "code_file": "gate0a_stage012_kaggle.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

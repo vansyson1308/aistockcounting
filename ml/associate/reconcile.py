@@ -148,6 +148,60 @@ def merge_tracklets(
 # --------------------------------------------------------------- entrypoint
 
 
+def audit_pairs(parts: list[Tracklet], cfg: ReconcileConfig) -> dict[str, int]:
+    """Classify every ordered tracklet pair once (pre-merge accounting).
+
+    conflicts: temporally overlapping (can never be the same player);
+    gate_rejected: disjoint but outside the reachability/gap/team gate;
+    cost_rejected: feasible but appearance cost above `merge_max_cost`;
+    feasible_under_cost: merge candidates before agglomeration.
+    """
+    counts = {"pairs": 0, "conflicts": 0, "gate_rejected": 0,
+              "cost_rejected": 0, "feasible_under_cost": 0}
+    ordered = sorted(parts, key=lambda t: t.start)
+    for i in range(len(ordered)):
+        for j in range(i + 1, len(ordered)):
+            a, b = ordered[i], ordered[j]
+            counts["pairs"] += 1
+            if overlaps(a, b):
+                counts["conflicts"] += 1
+            elif not _pair_feasible(a, b, cfg):
+                counts["gate_rejected"] += 1
+            elif _pair_cost(a, b) > cfg.merge_max_cost:
+                counts["cost_rejected"] += 1
+            else:
+                counts["feasible_under_cost"] += 1
+    return counts
+
+
+def reconcile_with_stats(
+    tracklets: list[Tracklet], cfg: ReconcileConfig | None = None
+) -> tuple[dict[int, int], dict[str, int]]:
+    """`reconcile` plus split/merge accounting (accepted merges, rejections)."""
+    cfg = cfg or ReconcileConfig()
+    parts: list[Tracklet] = []
+    next_id = max((t.tracklet_id for t in tracklets), default=0) + 1
+    n_split = 0
+    for t in tracklets:
+        split, next_id = split_tracklet(t, cfg, next_id)
+        n_split += len(split) > 1
+        parts.extend(split)
+    stats = {"n_tracklets_in": len(tracklets), "n_tracklets_split": n_split,
+             "n_parts_after_split": len(parts)}
+    stats.update(audit_pairs(parts, cfg))
+    groups = merge_tracklets(parts, cfg)
+    stats["n_canonical_out"] = len(groups)
+    stats["merges_accepted"] = len(parts) - len(groups)
+    stats["merges_rejected"] = stats["gate_rejected"] + stats["cost_rejected"]
+    mapping: dict[int, int] = {}
+    for canonical, group in enumerate(
+        sorted(groups, key=lambda g: g[0].start), start=1
+    ):
+        for t in group:
+            mapping[t.tracklet_id] = canonical
+    return mapping, stats
+
+
 def reconcile(
     tracklets: list[Tracklet], cfg: ReconcileConfig | None = None
 ) -> dict[int, int]:
@@ -157,17 +211,5 @@ def reconcile(
     mapping back to the *original* tracklet id per frame range is handled by
     callers that re-emit rows; this seed maps whole tracklets).
     """
-    cfg = cfg or ReconcileConfig()
-    parts: list[Tracklet] = []
-    next_id = max((t.tracklet_id for t in tracklets), default=0) + 1
-    for t in tracklets:
-        split, next_id = split_tracklet(t, cfg, next_id)
-        parts.extend(split)
-    groups = merge_tracklets(parts, cfg)
-    mapping: dict[int, int] = {}
-    for canonical, group in enumerate(
-        sorted(groups, key=lambda g: g[0].start), start=1
-    ):
-        for t in group:
-            mapping[t.tracklet_id] = canonical
+    mapping, _stats = reconcile_with_stats(tracklets, cfg)
     return mapping

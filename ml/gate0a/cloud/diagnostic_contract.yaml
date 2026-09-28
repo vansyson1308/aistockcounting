@@ -1,0 +1,74 @@
+# Gate 0A CLOUD — Stage 0+1+2 DIAGNOSTIC CONTRACT (frozen BEFORE any prediction exists)
+#
+#   DIAGNOSTIC — NOT OFFICIAL GATE 0A VERDICT
+#   TEST SET UNTOUCHED
+#
+# This contract is separate from, and subordinate to, the official frozen gate
+# (ml/gate0a/thresholds.yaml, sha256 0d8bb0d6…). It decides only whether the
+# first real-video cloud evidence cycle moves the product between maturity
+# levels 1 / 1.5 / 2. It is hashed into every artifact manifest; changing it
+# after results exist invalidates the run.
+contract_id: gate0a-cloud-stage012-v1
+
+metric_units:
+  # Canonical scale for EVERY metric produced by this run. The evaluator
+  # (ml.eval.metrics + ml.eval.trackeval_wrapper) emits fractions in [0, 1];
+  # Stage 0 verifies this on real v2 GT and records it in evaluator_sanity.json.
+  # Reports carry both `<metric>` (fraction) and `<metric>_percent`.
+  canonical: fraction
+  percent_fields_also_emitted: true
+
+data_scope:
+  dataset: atomscott/soccertrack-v2
+  allowed_match_ids: ["118578"]          # VAL only (official split_manifest.yaml)
+  forbidden_match_ids: ["128057", "132831"]  # TEST — never listed for download
+  target_half: "1st"
+
+gt_policy:
+  # MOTChallenge conf==0 rows are ignore regions (SoccerTrack v2 format-mot.md):
+  # excluded from GT, and predictions overlapping them (IoU >= 0.5) are removed
+  # before scoring, mirroring TrackEval preprocessing.
+  ignore_rows_conf_zero: true
+  ignore_suppress_iou: 0.5
+  gt_identity_use: "scoring only — never a model input in any Real (P*) variant"
+  gt_boxes_use: "Oracle (O*) variants only; identities always hidden"
+  gt_team_use: "scoring only; O4 oracle-team is a labeled upper bound"
+
+windows:
+  source_half: "118578_1st"
+  selection: "GT-only, deterministic; frozen to diagnostic_windows.yaml before predictions"
+  roles: [TUNE, OPEN, DENSE, FAR]
+  tune_use: "tracker ambiguity-margin selection + config compatibility ONLY"
+  final_clips: [OPEN, DENSE, FAR]
+
+tracker_tuning:
+  parameter: ambiguity_margin
+  grid: [0.0, 0.03, 0.05, 0.10, 0.15]
+  measured_on: TUNE
+  variant: P2
+  selection_rule: "argmax AssA; tie → fewer id_switches; tie → smaller margin"
+  frozen_before: "any OPEN/DENSE/FAR evaluation"
+
+level2_criteria:
+  # ALL must hold for LEVEL 2 — WORKING CV PROTOTYPE.
+  chain: "video → real detector → real image embeddings → MOT → offline reconciliation, no manual repair"
+  clips_scored: [OPEN, DENSE, FAR]
+  open_play_hota_min: 0.40      # variant P4 on OPEN (fraction)
+  deta_min: 0.45                # variant P4 on OPEN (fraction)
+  recall_ge40px_min: 0.85       # detector recall, GT boxes >= 40 px high, all three clips combined
+  bottleneck_identified: true   # diagnosis label != UNDETERMINED
+level15_rule: "real chain executed and scored on all three clips, but any level-2 bar missed"
+level1_rule: "real chain did not execute end-to-end on real video"
+
+bottleneck_rules:
+  # Evidence thresholds used by ml.gate0a.cloud.bottleneck (fractions).
+  strong_oracle_assa: 0.55      # O3 AssA at/above this = association machinery healthy given boxes
+  detection_gap_min: 0.10       # O3.assa - P4.assa
+  reid_gain_min: 0.02           # O2.assa - O1.assa below this = embeddings not helping
+  reid_within_team_top1_weak: 0.50
+  association_weak_assa: 0.50   # O3.assa below this with GT boxes = association-limited
+  association_weak_integrity: 0.80
+  team_accuracy_weak: 0.90
+  team_veto_harm_min: 0.05      # P4_noteam.assa - P4.assa
+
+px_height_bins: [0, 20, 30, 40, 50, 60, 80, 110, 10000]

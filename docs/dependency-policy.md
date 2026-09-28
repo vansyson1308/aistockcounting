@@ -48,6 +48,13 @@ inventory app pins `ultralytics` in `backend/requirements.txt` and
 `training/requirements-train.txt`. These manifests are grandfathered in the
 license gate until the Phase 0b migration deletes the legacy inference path.
 New code must not import ultralytics; the gate bans it everywhere else. |
+| 2026-09-08 | **Diagnostic-only pretrained weights (Gate 0A cloud Stage 0–2).**
+COCO-trained D-FINE / RT-DETRv2 checkpoints (via `transformers`, Apache-2.0
+code) and torchvision ImageNet ResNet weights may be used for the
+research-phase diagnostic run on SoccerTrack v2 only. They are recorded in
+every artifact manifest as `provenance_class: RESEARCH-DIAGNOSTIC`, never
+enter a product image or a product training path, and every product model
+is retrained on own-footage data. |
 
 | 2026-09-25 | **Legacy exception closed.** The backend runtime moved to OpenCV 5 DNN (`opencv-python-headless==5.0.0.93`) serving a YOLOX (Apache-2.0) ONNX model. `ultralytics` and `onnxruntime` left `backend/requirements.txt`, and `training/requirements-train.txt` was replaced by `training/requirements-yolox.txt`. `GRANDFATHERED` is now empty, and runtime manifests may never be grandfathered again (the gate enforces this). |
 
